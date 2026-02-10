@@ -1,224 +1,199 @@
 <?php
-namespace CreditSystem\Domain;
 
-if (!defined('ABSPATH')) {
-    exit;
-}
+namespace CreditSystem\Includes\Domain;
+
+use DateTimeImmutable;
+use InvalidArgumentException;
 
 class CreditAccount
 {
-    protected int $id;
-    protected int $user_id;
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_ACTIVE = 'active';
+    public const STATUS_BLOCKED = 'blocked';
 
-    protected float $credit_limit;
-    protected float $used_amount;
-    protected float $available_amount;
+    public const KYC_PENDING = 'pending';
+    public const KYC_APPROVED = 'approved';
+    public const KYC_REJECTED = 'rejected';
 
-    protected int $installment_count;
-    protected float $monthly_installment_amount;
+    private int $id;
+    private int $userId;
 
-    protected string $status; 
-    // active | overdue | settled | suspended
+    private float $creditLimit;
+    private float $availableCredit;
+    private float $lockedCredit;
 
-    protected \DateTime $created_at;
-    protected ?\DateTime $updated_at = null;
+    private int $installmentMonths;
+
+    private string $status;
+    private string $kycStatus;
+
+    private DateTimeImmutable $createdAt;
+    private ?DateTimeImmutable $activatedAt;
 
     public function __construct(
-        int $user_id,
-        float $credit_limit,
-        int $installment_count
+        int $userId,
+        float $creditLimit,
+        int $installmentMonths,
+        string $kycStatus = self::KYC_PENDING
     ) {
-        if ($installment_count <= 0) {
-            throw new \InvalidArgumentException('Installment count must be greater than zero.');
+        if ($creditLimit <= 0) {
+            throw new InvalidArgumentException('Credit limit must be greater than zero.');
         }
 
-        $this->user_id = $user_id;
-        $this->credit_limit = $credit_limit;
-        $this->used_amount = 0;
-        $this->available_amount = $credit_limit;
+        if (!in_array($installmentMonths, [3, 6, 12], true)) {
+            throw new InvalidArgumentException('Invalid installment plan. Allowed: 3, 6, 12 months.');
+        }
 
-        $this->installment_count = $installment_count;
-        $this->monthly_installment_amount = round(
-            $credit_limit / $installment_count,
-            2
-        );
+        $this->userId = $userId;
+        $this->creditLimit = $creditLimit;
+        $this->availableCredit = $creditLimit;
+        $this->lockedCredit = 0.0;
+        $this->installmentMonths = $installmentMonths;
 
-        $this->status = 'active';
-        $this->created_at = new \DateTime();
+        $this->status = self::STATUS_PENDING;
+        $this->kycStatus = $kycStatus;
+
+        $this->createdAt = new DateTimeImmutable();
+        $this->activatedAt = null;
     }
 
-    /* =======================
-     * Identity
-     * ======================= */
+    /* -----------------------------
+     * KYC
+     * --------------------------- */
 
-    public function setId(int $id): void
+    public function approveKyc(): void
     {
-        $this->id = $id;
+        $this->kycStatus = self::KYC_APPROVED;
     }
 
-    public function getId(): int
+    public function rejectKyc(): void
     {
-        return $this->id;
+        $this->kycStatus = self::KYC_REJECTED;
+        $this->block();
     }
+
+    public function isKycApproved(): bool
+    {
+        return $this->kycStatus === self::KYC_APPROVED;
+    }
+
+    /* -----------------------------
+     * Account lifecycle
+     * --------------------------- */
+
+    public function activate(): void
+    {
+        if (!$this->isKycApproved()) {
+            throw new InvalidArgumentException('Cannot activate credit account without approved KYC.');
+        }
+
+        $this->status = self::STATUS_ACTIVE;
+        $this->activatedAt = new DateTimeImmutable();
+    }
+
+    public function block(): void
+    {
+        $this->status = self::STATUS_BLOCKED;
+    }
+
+    public function isActive(): bool
+    {
+        return $this->status === self::STATUS_ACTIVE;
+    }
+
+    /* -----------------------------
+     * Credit operations
+     * --------------------------- */
+
+    public function canUseCredit(float $amount): bool
+    {
+        return $this->isActive() && $amount > 0 && $this->availableCredit >= $amount;
+    }
+
+    public function lockCredit(float $amount): void
+    {
+        if (!$this->canUseCredit($amount)) {
+            throw new InvalidArgumentException('Insufficient available credit or account inactive.');
+        }
+
+        $this->availableCredit -= $amount;
+        $this->lockedCredit += $amount;
+    }
+
+    public function consumeLockedCredit(float $amount): void
+    {
+        if ($amount <= 0 || $this->lockedCredit < $amount) {
+            throw new InvalidArgumentException('Invalid locked credit consumption.');
+        }
+
+        $this->lockedCredit -= $amount;
+    }
+
+    public function releaseLockedCredit(float $amount): void
+    {
+        if ($amount <= 0 || $this->lockedCredit < $amount) {
+            throw new InvalidArgumentException('Invalid locked credit release.');
+        }
+
+        $this->lockedCredit -= $amount;
+        $this->availableCredit += $amount;
+    }
+
+    /* -----------------------------
+     * Installments
+     * --------------------------- */
+
+    public function getInstallmentMonths(): int
+    {
+        return $this->installmentMonths;
+    }
+
+    public function calculateMonthlyInstallment(float $totalAmount): float
+    {
+        return round($totalAmount / $this->installmentMonths, 2);
+    }
+
+    /* -----------------------------
+     * Getters
+     * --------------------------- */
 
     public function getUserId(): int
     {
-        return $this->user_id;
+        return $this->userId;
     }
-
-    /* =======================
-     * Credit amounts
-     * ======================= */
 
     public function getCreditLimit(): float
     {
-        return $this->credit_limit;
+        return $this->creditLimit;
     }
 
-    public function getUsedAmount(): float
+    public function getAvailableCredit(): float
     {
-        return $this->used_amount;
+        return $this->availableCredit;
     }
 
-    public function getAvailableAmount(): float
+    public function getLockedCredit(): float
     {
-        return $this->available_amount;
+        return $this->lockedCredit;
     }
-
-    public function canSpend(float $amount): bool
-    {
-        return $amount > 0 && $amount <= $this->available_amount && $this->status === 'active';
-    }
-
-    public function spend(float $amount): void
-    {
-        if (!$this->canSpend($amount)) {
-            throw new \RuntimeException('اعتبار کافی نمی باشد و یا حساب شما غیرفعال شده است.');
-        }
-
-        $this->used_amount += $amount;
-        $this->available_amount -= $amount;
-        $this->touch();
-    }
-
-    public function refund(float $amount): void
-    {
-        if ($amount <= 0) {
-            throw new \InvalidArgumentException('اعتباری برای حساب شما یافت نشد.');
-        }
-
-        $this->used_amount = max(0, $this->used_amount - $amount);
-        $this->available_amount = min(
-            $this->credit_limit,
-            $this->available_amount + $amount
-        );
-
-        $this->touch();
-    }
-    /* =======================
-     * Installments
-     * ======================= */
-
-    public function getInstallmentCount(): int
-    {
-        return $this->installment_count;
-    }
-
-    public function getMonthlyInstallmentAmount(): float
-    {
-        return $this->monthly_installment_amount;
-    }
-
-    public function recalculateInstallments(int $new_count): void
-    {
-        if ($new_count <= 0) {
-            throw new \InvalidArgumentException('تعداد قسط ها باید باید از صفر بیشتر باشد.');
-        }
-
-        $this->installment_count = $new_count;
-        $this->monthly_installment_amount = round(
-            $this->credit_limit / $new_count,
-            2
-        );
-
-        $this->touch();
-    }
-
-    /* =======================
-     * Status management
-     * ======================= */
 
     public function getStatus(): string
     {
         return $this->status;
     }
 
-    public function markOverdue(): void
+    public function getKycStatus(): string
     {
-        if ($this->status !== 'settled') {
-            $this->status = 'overdue';
-            $this->touch();
-        }
+        return $this->kycStatus;
     }
 
-    public function markActive(): void
+    public function getCreatedAt(): DateTimeImmutable
     {
-        if ($this->status !== 'settled') {
-            $this->status = 'active';
-            $this->touch();
-        }
+        return $this->createdAt;
     }
 
-    public function markSettled(): void
+    public function getActivatedAt(): ?DateTimeImmutable
     {
-        $this->status = 'settled';
-        $this->available_amount = 0;
-        $this->used_amount = 0;
-        $this->touch();
-    }
-
-    public function suspend(): void
-    {
-        $this->status = 'suspended';
-        $this->touch();
-    }
-
-    /* =======================
-     * Timestamps
-     * ======================= */
-
-    protected function touch(): void
-    {
-        $this->updated_at = new \DateTime();
-    }
-
-    public function getCreatedAt(): \DateTime
-    {
-        return $this->created_at;
-    }
-
-    public function getUpdatedAt(): ?\DateTime
-    {
-        return $this->updated_at;
-    }
-
-    /* =======================
-     * Serialization
-     * ======================= */
-
-    public function toArray(): array
-    {
-        return [
-            'id' => $this->id ?? null,
-            'user_id' => $this->user_id,
-            'credit_limit' => $this->credit_limit,
-            'used_amount' => $this->used_amount,
-            'available_amount' => $this->available_amount,
-            'installment_count' => $this->installment_count,
-            'monthly_installment_amount' => $this->monthly_installment_amount,
-            'status' => $this->status,
-            'created_at' => $this->created_at->format('Y-m-d H:i:s'),
-            'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
-        ];
+        return $this->activatedAt;
     }
 }
