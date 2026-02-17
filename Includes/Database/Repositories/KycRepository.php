@@ -3,18 +3,15 @@
 namespace CreditSystem\Includes\Database\Repositories;
 
 use CreditSystem\Includes\Domain\KycRequest;
-use wpdb;
 
-class KycRepository
+class KycRepository extends BaseRepository
 {
-    private wpdb $db;
-    private string $table;
+    protected string $table;
 
     public function __construct()
     {
-        global $wpdb;
-        $this->db = $wpdb;
-        $this->table = $wpdb->prefix . 'cs_kyc_requests';
+        parent::__construct();
+        $this->table = $this->db->prefix . 'cs_kyc_requests';
     }
 
     /**
@@ -22,7 +19,10 @@ class KycRepository
      */
     public function create(KycRequest $kyc): int
     {
-        $this->db->insert(
+        // #region agent log
+        file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'KycRepository.php:create','message'=>'Creating KYC request','data'=>['user_id'=>$kyc->getUserId()],'runId'=>'run1','hypothesisId'=>'K']) . "\n", FILE_APPEND);
+        // #endregion
+        $result = $this->insert(
             $this->table,
             [
                 'user_id' => $kyc->getUserId(),
@@ -47,8 +47,10 @@ class KycRepository
                 '%s',
             ]
         );
-
-        return (int) $this->db->insert_id;
+        // #region agent log
+        file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'KycRepository.php:create','message'=>'KYC creation result','data'=>['result'=>$result,'error'=>$this->lastError()],'runId'=>'run1','hypothesisId'=>'K']) . "\n", FILE_APPEND);
+        // #endregion
+        return $result;
     }
 
     /**
@@ -56,15 +58,12 @@ class KycRepository
      */
     public function getByUserId(int $userId): ?KycRequest
     {
-        $row = $this->db->get_row(
-            $this->db->prepare(
-                "SELECT * FROM {$this->table} WHERE user_id = %d ORDER BY id DESC LIMIT 1",
-                $userId
-            ),
-            ARRAY_A
+        $row = $this->getRow(
+            "SELECT * FROM {$this->table} WHERE user_id = %d ORDER BY id DESC LIMIT 1",
+            [$userId]
         );
 
-        return $row ? $this->mapRowToDomain($row) : null;
+        return $row ? $this->mapRowToDomain((array)$row) : null;
     }
 
     /**
@@ -78,21 +77,24 @@ class KycRepository
         $data = [
             'status' => $status,
         ];
+        $formats = ['%s'];
 
         if ($status === 'approved') {
             $data['approved_at'] = current_time('mysql');
             $data['rejection_reason'] = null;
+            $formats = ['%s', '%s', '%s'];
         }
 
         if ($status === 'rejected') {
             $data['rejection_reason'] = $rejectionReason;
+            $formats = ['%s', '%s'];
         }
 
-        return (bool) $this->db->update(
+        return parent::update(
             $this->table,
             $data,
             ['id' => $kycId],
-            null,
+            $formats,
             ['%d']
         );
     }
@@ -102,16 +104,12 @@ class KycRepository
      */
     public function getPendingList(int $limit = 20, int $offset = 0): array
     {
-        $results = $this->db->get_results(
-            $this->db->prepare(
-                "SELECT * FROM {$this->table}
-                 WHERE status = 'pending'
-                 ORDER BY submitted_at ASC
-                 LIMIT %d OFFSET %d",
-                $limit,
-                $offset
-            ),
-            ARRAY_A
+        $results = $this->getResults(
+            "SELECT * FROM {$this->table}
+             WHERE status = 'pending'
+             ORDER BY submitted_at ASC
+             LIMIT %d OFFSET %d",
+            [$limit, $offset]
         );
 
         return array_map([$this, 'mapRowToDomain'], $results);
@@ -120,8 +118,9 @@ class KycRepository
     /**
      * تبدیل ردیف دیتابیس به Domain Object
      */
-    private function mapRowToDomain(array $row): KycRequest
+    private function mapRowToDomain(array|object $row): KycRequest
     {
+        $row = (array) $row;
         $kyc = new KycRequest(
             userId: (int) $row['user_id'],
             documents: json_decode($row['documents'], true) ?? [],

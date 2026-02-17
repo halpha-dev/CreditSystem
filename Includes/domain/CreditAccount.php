@@ -196,4 +196,50 @@ class CreditAccount
     {
         return $this->activatedAt;
     }
+
+    public function getId(): int
+    {
+        return $this->id;
+    }
+
+    public function setId(int $id): void
+    {
+        $this->id = $id;
+    }
+
+    /**
+     * Alias for getAvailableCredit (for service compatibility)
+     */
+    public function getAvailableBalance(): float
+    {
+        return $this->getAvailableCredit();
+    }
+
+    /**
+     * Factory method to reconstruct from database
+     */
+    public static function fromArray(array $data): self
+    {
+        $account = new self(
+            (int) $data['user_id'],
+            (float) $data['credit_limit'],
+            (int) ($data['installment_plan_id'] ?? 3), // Default to 3 months if not set
+            $data['kyc_status'] ?? self::KYC_PENDING
+        );
+
+        $account->id = (int) $data['id'];
+        $account->availableCredit = (float) ($data['available_credit'] ?? $data['credit_limit']);
+        $account->lockedCredit = (float) ($data['locked_credit'] ?? 0.0);
+        $account->status = $data['status'] ?? self::STATUS_PENDING;
+        $account->kycStatus = $data['kyc_status'] ?? self::KYC_PENDING;
+        
+        if (isset($data['created_at'])) {
+            $account->createdAt = new DateTimeImmutable($data['created_at']);
+        }
+        if (isset($data['activated_at'])) {
+            $account->activatedAt = new DateTimeImmutable($data['activated_at']);
+        }
+
+        return $account;
+    }
 }

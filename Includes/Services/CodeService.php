@@ -1,10 +1,10 @@
 <?php
 namespace CreditSystem\Includes\Services;
 
-use CreditSystem\Includes\Database\Repositories\CreditCodeRepository;
-use CreditSystem\Includes\Database\Repositories\CreditAccountRepository;
-use CreditSystem\Includes\Database\TransactionManager;
-use CreditSystem\Includes\Domain\CreditCode;
+use CreditSystem\Database\Repositories\CreditCodeRepository;
+use CreditSystem\Database\Repositories\CreditAccountRepository;
+use CreditSystem\Database\TransactionManager;
+use CreditSystem\Domain\CreditCode;
 
 class CodeService
 {
@@ -35,7 +35,7 @@ class CodeService
                 throw new \Exception('Credit account not found.');
             }
 
-            if ($account->getAvailableBalance() < $amount) {
+            if ($account->getAvailableCredit() < $amount) {
                 throw new \Exception('Insufficient credit balance.');
             }
 
@@ -52,8 +52,16 @@ class CodeService
                 strtotime('+15 minutes', current_time('timestamp'))
             );
 
+            $codeId = $this->codeRepository->create([
+                'code' => $codeValue,
+                'user_id' => $userId,
+                'merchant_id' => $merchantId,
+                'amount' => $amount,
+                'expires_at' => $expiresAt,
+            ]);
+
             $creditCode = new CreditCode(
-                null,
+                $codeId,
                 $codeValue,
                 $userId,
                 $merchantId,
@@ -63,9 +71,6 @@ class CodeService
                 null,
                 current_time('mysql')
             );
-
-            $codeId = $this->codeRepository->insert($creditCode);
-            $creditCode->setId($codeId);
 
             TransactionManager::commit();
 

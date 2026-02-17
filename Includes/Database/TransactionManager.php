@@ -1,4 +1,6 @@
 <?php
+namespace CreditSystem\Database;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -8,57 +10,65 @@ class TransactionManager
     /**
      * @var wpdb
      */
-    protected $wpdb;
+    protected static $wpdb;
 
     /**
      * if in transacion
      */
-    protected bool $inTransaction = false;
+    protected static bool $inTransaction = false;
 
-    public function __construct()
+    /**
+     * Initialize static wpdb reference
+     */
+    protected static function init(): void
     {
-        global $wpdb;
-        $this->wpdb = $wpdb;
+        if (self::$wpdb === null) {
+            global $wpdb;
+            self::$wpdb = $wpdb;
+        }
     }
 
     /**
      * begin transacion database
      */
-    public function begin(): void
+    public static function begin(): void
     {
-        if ($this->inTransaction) {
+        self::init();
+        if (self::$inTransaction) {
             return;
         }
 
         // make sure of InnoDB
-        $this->wpdb->query('START TRANSACTION');
-        $this->inTransaction = true;
+        self::$wpdb->query('START TRANSACTION');
+        self::$inTransaction = true;
     }
 
     /**
      * finall comit tranaction
      */
-    public function commit(): void
+    public static function commit(): void
     {
-        if (!$this->inTransaction) {
+        self::init();
+        if (!self::$inTransaction) {
             return;
         }
 
-        $this->wpdb->query('COMMIT');
-        $this->inTransaction = false;
+        self::$wpdb->query('COMMIT');
+        self::$inTransaction = false;
     }
 
     /**
      * rolback change of transaction
      */
-    public function rollback(): void
+    public static function rollback(): void
     {
-        if (!$this->inTransaction) {
+        self::init();
+        if (!self::$inTransaction) {
             return;
         }
 
-        $this->wpdb->query('ROLLBACK');
-        $this->inTransaction = false;
+        self::$wpdb->query('ROLLBACK');
+        self::$inTransaction = false;
     }
 
     /**
@@ -68,9 +78,9 @@ class TransactionManager
      * @return mixed
      * @throws Exception
      */
-    public function run(callable $callback)
+    public static function run(callable $callback)
     {
-        $this->begin();
+        self::begin();
 
         try {
             $result = $callback();
@@ -79,11 +89,11 @@ class TransactionManager
                 throw new Exception('Transaction failed');
             }
 
-            $this->commit();
+            self::commit();
             return $result;
 
-        } catch (Throwable $e) {
-            $this->rollback();
+        } catch (\Throwable $e) {
+            self::rollback();
             throw $e;
         }
     }
@@ -91,9 +101,10 @@ class TransactionManager
     /**
      * check db suppurt transaction or not
      */
-    public function supportsTransactions(): bool
+    public static function supportsTransactions(): bool
     {
-        $engine = $this->wpdb->get_var(
+        self::init();
+        $engine = self::$wpdb->get_var(
             "SELECT ENGINE
              FROM information_schema.TABLES
              WHERE TABLE_SCHEMA = DATABASE()

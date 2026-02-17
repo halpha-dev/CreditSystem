@@ -1,5 +1,5 @@
 <?php
-namespace CreditSystem\Includes\Database\Repositories;
+namespace CreditSystem\Database\Repositories;
 
 use CreditSystem\Domain\Installment;
 
@@ -13,8 +13,8 @@ class InstallmentRepository extends BaseRepository
 
     public function __construct()
     {
-        global $wpdb;
-        $this->table = $wpdb->prefix . 'installments';
+        parent::__construct();
+        $this->table = $this->db->prefix . 'installments';
     }
 
     /**
@@ -22,9 +22,10 @@ class InstallmentRepository extends BaseRepository
      */
     public function create(Installment $installment): int
     {
-        global $wpdb;
-
-        $wpdb->insert(
+        // #region agent log
+        file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'InstallmentRepository.php:create','message'=>'Creating installment','data'=>['user_id'=>$installment->getUserId()],'runId'=>'run1','hypothesisId'=>'I']) . "\n", FILE_APPEND);
+        // #endregion
+        $result = $this->insert(
             $this->table,
             [
                 'user_id' => $installment->getUserId(),
@@ -40,8 +41,10 @@ class InstallmentRepository extends BaseRepository
             ],
             ['%d','%d','%d','%s','%f','%f','%f','%s','%s','%s']
         );
-
-        return (int) $wpdb->insert_id;
+        // #region agent log
+        file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'InstallmentRepository.php:create','message'=>'Installment creation result','data'=>['result'=>$result,'error'=>$this->lastError()],'runId'=>'run1','hypothesisId'=>'I']) . "\n", FILE_APPEND);
+        // #endregion
+        return $result;
     }
 
     /**
@@ -49,14 +52,20 @@ class InstallmentRepository extends BaseRepository
      */
     public function findByUserId(int $userId): array
     {
-        global $wpdb;
-
-        $rows = $wpdb->get_results(
-            $wpdb->prepare("SELECT * FROM {$this->table} WHERE user_id = %d ORDER BY due_date ASC", $userId),
-            ARRAY_A
+        $rows = $this->getResults(
+            "SELECT * FROM {$this->table} WHERE user_id = %d ORDER BY due_date ASC",
+            [$userId]
         );
 
         return array_map([$this, 'mapRowToEntity'], $rows);
+    }
+
+    /**
+     * Alias for findByUserId (for service compatibility)
+     */
+    public function getByUserId(int $userId): array
+    {
+        return $this->findByUserId($userId);
     }
 
     /**
@@ -64,11 +73,9 @@ class InstallmentRepository extends BaseRepository
      */
     public function findByCreditAccountId(int $creditAccountId): array
     {
-        global $wpdb;
-
-        $rows = $wpdb->get_results(
-            $wpdb->prepare("SELECT * FROM {$this->table} WHERE credit_account_id = %d ORDER BY due_date ASC", $creditAccountId),
-            ARRAY_A
+        $rows = $this->getResults(
+            "SELECT * FROM {$this->table} WHERE credit_account_id = %d ORDER BY due_date ASC",
+            [$creditAccountId]
         );
 
         return array_map([$this, 'mapRowToEntity'], $rows);
@@ -79,9 +86,7 @@ class InstallmentRepository extends BaseRepository
      */
     public function update(Installment $installment): bool
     {
-        global $wpdb;
-
-        return (bool) $wpdb->update(
+        return parent::update(
             $this->table,
             [
                 'base_amount' => $installment->getBaseAmount(),
@@ -97,45 +102,122 @@ class InstallmentRepository extends BaseRepository
         );
     }
 
-}
-/**
+    /**
      * find due or overdue for penallty
      */
     public function findDueOrOverdue(): array
     {
-        global $wpdb;
-
         $today = current_time('Y-m-d');
 
-        $rows = $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT * FROM {$this->table} WHERE status IN ('unpaid','overdue') AND due_date <= %s",
-                $today
-            ),
-            ARRAY_A
+        $rows = $this->getResults(
+            "SELECT * FROM {$this->table} WHERE status IN ('unpaid','overdue') AND due_date <= %s",
+            [$today]
         );
 
         return array_map([$this, 'mapRowToEntity'], $rows);
     }
 
     /**
+     * Get overdue installments (for service compatibility)
+     */
+    public function getOverdue(): array
+    {
+        $today = current_time('Y-m-d');
+        $rows = $this->getResults(
+            "SELECT * FROM {$this->table} WHERE status = 'overdue' AND due_date < %s",
+            [$today]
+        );
+        return array_map([$this, 'mapRowToEntity'], $rows);
+    }
+
+    /**
+     * Get installments due in N days (for service compatibility)
+     */
+    public function getDueInDays(int $daysBefore): array
+    {
+        $targetDate = date('Y-m-d', strtotime("+{$daysBefore} days"));
+        $rows = $this->getResults(
+            "SELECT * FROM {$this->table} 
+             WHERE status = 'unpaid' 
+             AND due_date = %s
+             ORDER BY due_date ASC",
+            [$targetDate]
+        );
+        return array_map([$this, 'mapRowToEntity'], $rows);
+    }
+
+    /**
+     * Get installment for update (for service compatibility)
+     */
+    public function getForUpdate(int $installmentId, int $userId): ?Installment
+    {
+        $row = $this->getRow(
+            "SELECT * FROM {$this->table} WHERE id = %d AND user_id = %d LIMIT 1",
+            [$installmentId, $userId]
+        );
+        return $row ? $this->mapRowToEntity((array)$row) : null;
+    }
+
+    /**
+     * Mark installment as paid (for service compatibility)
+     */
+    public function markAsPaid(int $installmentId, int $transactionId): bool
+    {
+        $row = $this->getRow(
+            "SELECT * FROM {$this->table} WHERE id = %d LIMIT 1",
+            [$installmentId]
+        );
+        if (!$row) {
+            return false;
+        }
+        $installment = $this->mapRowToEntity((array)$row);
+        $installment->markAsPaid();
+        $installment->setTransactionId($transactionId);
+        return $this->update($installment);
+    }
+
+    /**
+     * Add penalty to installment (for service compatibility)
+     */
+    public function addPenalty(int $installmentId, float $penaltyAmount): bool
+    {
+        $row = $this->getRow(
+            "SELECT * FROM {$this->table} WHERE id = %d LIMIT 1",
+            [$installmentId]
+        );
+        if (!$row) {
+            return false;
+        }
+        $installment = $this->mapRowToEntity((array)$row);
+        // Add penalty directly (penaltyAmount is already calculated)
+        $installment->setPenaltyAmount($installment->getPenaltyAmount() + $penaltyAmount);
+        return $this->update($installment);
+    }
+
+    /**
      * نگاشت ردیف دیتابیس به موجودیت Installment
      */
-    protected function mapRowToEntity(array $row): Installment
+    protected function mapRowToEntity(array|object $row): Installment
     {
-        $installment = new Installment();
-        $installment->setId((int)$row['id']);
-        $installment->setUserId((int)$row['user_id']);
-        $installment->setCreditAccountId((int)$row['credit_account_id']);
-        $installment->setTransactionId((int)$row['transaction_id']);
-        $installment->setDueDate($row['due_date']);
-        $installment->setBaseAmount((float)$row['base_amount']);
-        $installment->setPenaltyAmount((float)$row['penalty_amount']);
-        $installment->setTotalAmount((float)$row['total_amount']);
-        $installment->setStatus($row['status']);
-        $installment->setPaidAt($row['paid_at']);
-        $installment->setCreatedAt($row['created_at']);
-        $installment->setUpdatedAt($row['updated_at'] ?? null);
+        $row = (array) $row;
+        // Use Installment::fromArray factory method if available, otherwise use setters
+        if (method_exists(Installment::class, 'fromArray')) {
+            return Installment::fromArray($row);
+        }
+        
+        // Fallback: create using constructor and setters
+        $installment = new Installment(
+            (int)$row['id'],
+            (int)$row['user_id'],
+            (int)$row['credit_account_id'],
+            (int)$row['transaction_id'],
+            (float)$row['base_amount'],
+            (float)$row['penalty_amount'],
+            $row['due_date'],
+            $row['status'],
+            $row['paid_at'] ?? null,
+            $row['created_at']
+        );
 
         return $installment;
     }

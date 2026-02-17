@@ -13,8 +13,8 @@ class TransactionRepository extends BaseRepository
 
     public function __construct()
     {
-        global $wpdb;
-        $this->table = $wpdb->prefix . 'transactions';
+        parent::__construct();
+        $this->table = $this->db->prefix . 'transactions';
     }
 
     /**
@@ -22,9 +22,10 @@ class TransactionRepository extends BaseRepository
      */
     public function create(Transaction $transaction): int
     {
-        global $wpdb;
-
-        $wpdb->insert(
+        // #region agent log
+        file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'TransactionRepository.php:create','message'=>'Creating transaction','data'=>['user_id'=>$transaction->getUserId(),'amount'=>$transaction->getAmount()],'runId'=>'run1','hypothesisId'=>'J']) . "\n", FILE_APPEND);
+        // #endregion
+        $result = $this->insert(
             $this->table,
             [
                 'user_id' => $transaction->getUserId(),
@@ -37,8 +38,10 @@ class TransactionRepository extends BaseRepository
             ],
             ['%d','%d','%d','%f','%s','%s','%s']
         );
-
-        return (int) $wpdb->insert_id;
+        // #region agent log
+        file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'TransactionRepository.php:create','message'=>'Transaction creation result','data'=>['result'=>$result,'error'=>$this->lastError()],'runId'=>'run1','hypothesisId'=>'J']) . "\n", FILE_APPEND);
+        // #endregion
+        return $result;
     }
 
     /**
@@ -46,14 +49,9 @@ class TransactionRepository extends BaseRepository
      */
     public function findByUserId(int $userId): array
     {
-        global $wpdb;
-
-        $rows = $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT * FROM {$this->table} WHERE user_id = %d ORDER BY created_at DESC",
-                $userId
-            ),
-            ARRAY_A
+        $rows = $this->getResults(
+            "SELECT * FROM {$this->table} WHERE user_id = %d ORDER BY created_at DESC",
+            [$userId]
         );
 
         return array_map([$this, 'mapRowToEntity'], $rows);
@@ -64,14 +62,9 @@ class TransactionRepository extends BaseRepository
      */
     public function findByMerchantId(int $merchantId): array
     {
-        global $wpdb;
-
-        $rows = $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT * FROM {$this->table} WHERE merchant_id = %d ORDER BY created_at DESC",
-                $merchantId
-            ),
-            ARRAY_A
+        $rows = $this->getResults(
+            "SELECT * FROM {$this->table} WHERE merchant_id = %d ORDER BY created_at DESC",
+            [$merchantId]
         );
 
         return array_map([$this, 'mapRowToEntity'], $rows);
@@ -81,9 +74,7 @@ class TransactionRepository extends BaseRepository
      */
     public function update(Transaction $transaction): bool
     {
-        global $wpdb;
-
-        return (bool) $wpdb->update(
+        return parent::update(
             $this->table,
             [
                 'amount' => $transaction->getAmount(),
@@ -97,10 +88,28 @@ class TransactionRepository extends BaseRepository
     }
 
     /**
+     * Insert transaction from array (for service compatibility)
+     */
+    public function insert(array $data): int
+    {
+        $transaction = new Transaction();
+        $transaction->setUserId($data['user_id'] ?? 0);
+        $transaction->setCreditAccountId($data['credit_account_id'] ?? null);
+        $transaction->setMerchantId($data['merchant_id'] ?? null);
+        $transaction->setAmount($data['amount'] ?? 0.0);
+        $transaction->setType($data['type'] ?? 'purchase');
+        $transaction->setStatus($data['status'] ?? 'success');
+        $transaction->setCreatedAt($data['created_at'] ?? current_time('mysql'));
+
+        return $this->create($transaction);
+    }
+
+    /**
      * نگاشت ردیف دیتابیس به موجودیت Transaction
      */
-    protected function mapRowToEntity(array $row): Transaction
+    protected function mapRowToEntity(array|object $row): Transaction
     {
+        $row = (array) $row;
         $transaction = new Transaction();
         $transaction->setId((int)$row['id']);
         $transaction->setUserId((int)$row['user_id']);

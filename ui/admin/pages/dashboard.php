@@ -1,110 +1,147 @@
 <?php
-/**
- * Admin Dashboard - CreditSystem
- */
+require_once __DIR__ . '/../../partials/header.php';
+require_once __DIR__ . '/../../partials/sidebar.php';
+require_once __DIR__ . '/../../partials/notices.php';
 
-use CreditSystem\Includes\Services\KycService;
-use CreditSystem\Includes\Services\InstallmentService;
-use CreditSystem\Includes\Services\TransactionService;
-use CreditSystem\Includes\Services\MerchantService;
-use CreditSystem\Includes\Security\PermissionPolicy;
+if (!is_admin()) {
+    die('دسترسی غیرمجاز');
+}
 
-PermissionPolicy::adminOnly();
+global $pdo;
 
-$kycService = new KycService();
-$installmentService = new InstallmentService();
-$transactionService = new TransactionService();
-$merchantService = new MerchantService();
+/* =========================
+   آمار کلی
+========================= */
 
-/**
- * داده‌های خلاصه
- */
-$pendingKycCount = count($kycService->getPendingList(100, 0));
-$overdueInstallments = $installmentService->getOverdueCount();
-$totalMerchants = $merchantService->getActiveCount();
-$todayTransactionsSum = $transactionService->getTodayTotal();
+// کاربران
+$total_users = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'user'")->fetchColumn();
+$total_merchants = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'merchant'")->fetchColumn();
+$total_admins = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'admin'")->fetchColumn();
+
+// KYC
+$kyc_pending = $pdo->query("SELECT COUNT(*) FROM kyc_requests WHERE status = 'pending'")->fetchColumn();
+$kyc_approved = $pdo->query("SELECT COUNT(*) FROM kyc_requests WHERE status = 'approved'")->fetchColumn();
+$kyc_rejected = $pdo->query("SELECT COUNT(*) FROM kyc_requests WHERE status = 'rejected'")->fetchColumn();
+
+// Installments
+$total_installments = $pdo->query("SELECT COUNT(*) FROM installments")->fetchColumn();
+$overdue_installments = $pdo->query("SELECT COUNT(*) FROM installments WHERE status = 'overdue'")->fetchColumn();
+$active_plans = $pdo->query("SELECT COUNT(*) FROM installment_plans WHERE status = 'active'")->fetchColumn();
+
+// Penalties
+$total_penalties = $pdo->query("SELECT COUNT(*) FROM penalties")->fetchColumn();
+$unpaid_penalties = $pdo->query("SELECT COUNT(*) FROM penalties WHERE status = 'unpaid'")->fetchColumn();
+
+// Reminders
+$pending_reminders = $pdo->query("SELECT COUNT(*) FROM reminders WHERE status = 'pending'")->fetchColumn();
+
+// Credit Codes
+$total_credit_codes = $pdo->query("SELECT COUNT(*) FROM credit_codes")->fetchColumn();
+$active_credit_codes = $pdo->query("SELECT COUNT(*) FROM credit_codes WHERE status = 'active'")->fetchColumn();
+$expired_credit_codes = $pdo->query("SELECT COUNT(*) FROM credit_codes WHERE expires_at < NOW()")->fetchColumn();
+
+// فروش کل
+$total_sales = $pdo->query("SELECT SUM(total_amount) FROM transactions WHERE status = 'completed'")->fetchColumn();
 ?>
 
-<div class="cs-admin-dashboard">
+<div class="admin-dashboard">
 
-    <?php include CS_UI_ADMIN_PARTIALS . '/header.php'; ?>
+    <h1>داشبورد مدیریت سیستم اقساط</h1>
 
-    <div class="cs-dashboard-grid">
-
-        <!-- کارت KYC -->
-        <div class="cs-card cs-card-warning">
-            <h3>احراز هویت‌های در انتظار</h3>
-            <p class="cs-metric"><?php echo esc_html($pendingKycCount); ?></p>
-            <a href="admin.php?page=creditsystem-kyc" class="cs-link">
-                بررسی درخواست‌ها
-            </a>
+    <!-- آمار نقش‌ها -->
+    <div class="card-grid">
+        <div class="card">
+            <h3>کاربران</h3>
+            <p><?php echo number_format($total_users); ?></p>
         </div>
+        <div class="card">
+            <h3>فروشندگان</h3>
+            <p><?php echo number_format($total_merchants); ?></p>
+        </div>
+        <div class="card">
+            <h3>ادمین‌ها</h3>
+            <p><?php echo number_format($total_admins); ?></p>
+        </div>
+    </div>
 
-        <!-- کارت اقساط معوق -->
-        <div class="cs-card cs-card-danger">
+    <!-- KYC -->
+    <h2>KYC</h2>
+    <div class="card-grid">
+        <div class="card warning">
+            <h3>در انتظار بررسی</h3>
+            <p><?php echo $kyc_pending; ?></p>
+        </div>
+        <div class="card success">
+            <h3>تایید شده</h3>
+            <p><?php echo $kyc_approved; ?></p>
+        </div>
+        <div class="card danger">
+            <h3>رد شده</h3>
+            <p><?php echo $kyc_rejected; ?></p>
+        </div>
+    </div>
+
+    <!-- اقساط -->
+    <h2>اقساط و پلن‌ها</h2>
+    <div class="card-grid">
+        <div class="card">
+            <h3>کل اقساط</h3>
+            <p><?php echo $total_installments; ?></p>
+        </div>
+        <div class="card danger">
             <h3>اقساط معوق</h3>
-            <p class="cs-metric"><?php echo esc_html($overdueInstallments); ?></p>
-            <a href="admin.php?page=creditsystem-installments" class="cs-link">
-                مشاهده اقساط
-            </a>
+            <p><?php echo $overdue_installments; ?></p>
         </div>
-
-        <!-- کارت فروشندگان -->
-        <div class="cs-card cs-card-info">
-            <h3>فروشندگان فعال</h3>
-            <p class="cs-metric"><?php echo esc_html($totalMerchants); ?></p>
-            <a href="admin.php?page=creditsystem-merchants" class="cs-link">
-                مدیریت فروشندگان
-            </a>
-        </div>
-
-        <!-- کارت تراکنش امروز -->
-        <div class="cs-card cs-card-success">
-            <h3>مجموع تراکنش امروز</h3>
-            <p class="cs-metric">
-                <?php echo number_format_i18n($todayTransactionsSum); ?> تومان
-            </p>
-            <a href="admin.php?page=creditsystem-transactions" class="cs-link">
-                جزئیات تراکنش‌ها
-            </a>
-        </div>
-
-    </div>
-
-    <!-- بخش یادآوری و جریمه -->
-    <div class="cs-section">
-        <h2>یادآوری‌ها و جریمه‌ها</h2>
-
-        <div class="cs-section-grid">
-            <div class="cs-box">
-                <h4>یادآوری‌های ارسال‌نشده</h4>
-                <p>
-                    <?php echo esc_html($installmentService->getPendingRemindersCount()); ?>
-                </p>
-                <a href="admin.php?page=creditsystem-reminders">مدیریت یادآوری‌ها</a>
-            </div>
-
-            <div class="cs-box">
-                <h4>جریمه‌های فعال</h4>
-                <p>
-                    <?php echo esc_html($installmentService->getActivePenaltiesCount()); ?>
-                </p>
-                <a href="admin.php?page=creditsystem-penalties">مدیریت جریمه‌ها</a>
-            </div>
+        <div class="card">
+            <h3>پلن‌های فعال</h3>
+            <p><?php echo $active_plans; ?></p>
         </div>
     </div>
 
-    <!-- وضعیت پلن‌های اقساط -->
-    <div class="cs-section">
-        <h2>پلن‌های اقساط</h2>
-        <p>
-            مدیریت پلن‌های فعال و شرایط بازپرداخت کاربران
-        </p>
-        <a class="button button-primary" href="admin.php?page=creditsystem-installment-plans">
-            مدیریت Installment Plan ها
-        </a>
+    <!-- جریمه -->
+    <h2>جریمه‌ها</h2>
+    <div class="card-grid">
+        <div class="card">
+            <h3>کل جریمه‌ها</h3>
+            <p><?php echo $total_penalties; ?></p>
+        </div>
+        <div class="card danger">
+            <h3>جریمه پرداخت نشده</h3>
+            <p><?php echo $unpaid_penalties; ?></p>
+        </div>
     </div>
 
-    <?php include CS_UI_ADMIN_PARTIALS . '/footer.php'; ?>
+    <!-- یادآوری -->
+    <h2>یادآوری‌ها</h2>
+    <div class="card">
+        <h3>در انتظار ارسال</h3>
+        <p><?php echo $pending_reminders; ?></p>
+    </div>
+
+    <!-- Credit Code -->
+    <h2>کردیت کد</h2>
+    <div class="card-grid">
+        <div class="card">
+            <h3>کل کدها</h3>
+            <p><?php echo $total_credit_codes; ?></p>
+        </div>
+        <div class="card success">
+            <h3>فعال</h3>
+            <p><?php echo $active_credit_codes; ?></p>
+        </div>
+        <div class="card danger">
+            <h3>منقضی شده</h3>
+            <p><?php echo $expired_credit_codes; ?></p>
+        </div>
+    </div>
+
+    <!-- فروش -->
+    <h2>گردش مالی</h2>
+    <div class="card highlight">
+        <h3>مجموع فروش تکمیل شده</h3>
+        <p><?php echo number_format($total_sales); ?> تومان</p>
+    </div>
 
 </div>
+
+<?php require_once __DIR__ . '/../../partials/footer.php'; ?>

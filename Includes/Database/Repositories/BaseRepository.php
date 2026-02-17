@@ -1,8 +1,6 @@
 <?php
 namespace CreditSystem\Database\Repositories;
 
-use wpdb;
-
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -14,7 +12,7 @@ if (!defined('ABSPATH')) {
  */
 abstract class BaseRepository
 {
-    protected wpdb $db;
+    protected \wpdb $db;
 
     public function __construct()
     {

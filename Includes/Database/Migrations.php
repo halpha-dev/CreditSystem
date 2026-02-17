@@ -2,7 +2,7 @@
 
 namespace CreditSystem\Includes\Database;
 
-use CreditSystem\Includes\Database\TransactionManager;
+use CreditSystem\Database\TransactionManager;
 
 class Migrations
 {

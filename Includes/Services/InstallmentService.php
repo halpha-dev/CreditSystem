@@ -1,11 +1,11 @@
 <?php
 namespace CreditSystem\Includes\Services;
 
-use CreditSystem\Includes\Database\Repositories\InstallmentRepository;
-use CreditSystem\Includes\Database\Repositories\CreditAccountRepository;
-use CreditSystem\Includes\Database\Repositories\TransactionRepository;
-use CreditSystem\Includes\Database\TransactionManager;
-use CreditSystem\Includes\Domain\Installment;
+use CreditSystem\Database\Repositories\InstallmentRepository;
+use CreditSystem\Database\Repositories\CreditAccountRepository;
+use CreditSystem\Database\Repositories\TransactionRepository;
+use CreditSystem\Database\TransactionManager;
+use CreditSystem\Domain\Installment;
 
 class InstallmentService
 {

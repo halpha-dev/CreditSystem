@@ -1,9 +1,9 @@
 <?php
 namespace CreditSystem\Includes\Services;
 
-use CreditSystem\Includes\Domain\InstallmentPlan;
-use CreditSystem\Includes\Domain\Installment;
-use CreditSystem\Includes\Database\Repositories\InstallmentRepository;
+use CreditSystem\Domain\InstallmentPlan;
+use CreditSystem\Domain\Installment;
+use CreditSystem\Database\Repositories\InstallmentRepository;
 
 class InstallmentPlanService {
 

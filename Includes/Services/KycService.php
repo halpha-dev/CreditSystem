@@ -3,9 +3,9 @@
 namespace CreditSystem\Includes\Services;
 
 use CreditSystem\Includes\Domain\KycRequest;
-use CreditSystem\Includes\Database\Repositories\KycRepository;
-use CreditSystem\Includes\Database\Repositories\CreditAccountRepository;
-use CreditSystem\Includes\Database\Repositories\MerchantRepository;
+use CreditSystem\Database\Repositories\KycRepository;
+use CreditSystem\Database\Repositories\CreditAccountRepository;
+use CreditSystem\Database\Repositories\MerchantRepository;
 use CreditSystem\Includes\Security\AuditLogger;
 use CreditSystem\Includes\Exceptions\DomainException;
 

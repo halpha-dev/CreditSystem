@@ -1,8 +1,8 @@
 <?php
 namespace CreditSystem\Includes\Services;
 
-use CreditSystem\Includes\Database\Repositories\InstallmentRepository;
-use CreditSystem\Includes\Database\Repositories\CreditCodeRepository;
+use CreditSystem\Database\Repositories\InstallmentRepository;
+use CreditSystem\Database\Repositories\CreditCodeRepository;
 use CreditSystem\Includes\Security\AuditLogger;
 
 class NotificationService

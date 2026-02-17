@@ -139,6 +139,14 @@ class Installment
         return strtotime(date('Y-m-d')) >= strtotime($this->dueDate);
     }
 
+    /**
+     * Alias for canBePaid (for service compatibility)
+     */
+    public function isPayable(): bool
+    {
+        return $this->canBePaid();
+    }
+
     public function markAsPaid(): void
     {
         if ($this->isPaid()) {
@@ -213,5 +221,66 @@ class Installment
             'paid_at'           => $this->paidAt,
             'created_at'        => $this->createdAt,
         ];
+    }
+
+    /* ========================
+     * Setters (for repository mapping)
+     * ====================== */
+
+    public function setId(int $id): void
+    {
+        $this->id = $id;
+    }
+
+    public function setUserId(int $userId): void
+    {
+        $this->userId = $userId;
+    }
+
+    public function setCreditAccountId(int $creditAccountId): void
+    {
+        $this->creditAccountId = $creditAccountId;
+    }
+
+    public function setTransactionId(int $transactionId): void
+    {
+        $this->transactionId = $transactionId;
+    }
+
+    public function setBaseAmount(float $baseAmount): void
+    {
+        $this->baseAmount = $baseAmount;
+        $this->totalAmount = $this->baseAmount + $this->penaltyAmount;
+    }
+
+    public function setPenaltyAmount(float $penaltyAmount): void
+    {
+        $this->penaltyAmount = $penaltyAmount;
+        $this->totalAmount = $this->baseAmount + $this->penaltyAmount;
+    }
+
+    public function setDueDate(string $dueDate): void
+    {
+        $this->dueDate = $dueDate;
+    }
+
+    public function setStatus(string $status): void
+    {
+        $this->status = $status;
+    }
+
+    public function setPaidAt(?string $paidAt): void
+    {
+        $this->paidAt = $paidAt;
+    }
+
+    public function setCreatedAt(string $createdAt): void
+    {
+        $this->createdAt = $createdAt;
+    }
+
+    public function setUpdatedAt(?string $updatedAt): void
+    {
+        // Not stored in domain, but needed for repository compatibility
     }
 }

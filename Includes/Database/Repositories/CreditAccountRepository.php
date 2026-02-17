@@ -1,8 +1,7 @@
 <?php
 namespace CreditSystem\Database\Repositories;
 
-use CreditSystem\Database\TransactionManager;
-use CreditSystem\Domain\CreditAccount;
+use CreditSystem\Includes\Domain\CreditAccount;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -14,8 +13,8 @@ class CreditAccountRepository extends BaseRepository
 
     public function __construct()
     {
-        global $wpdb;
-        $this->table = $wpdb->prefix . 'credit_accounts';
+        parent::__construct();
+        $this->table = $this->db->prefix . 'credit_accounts';
     }
 
     /**
@@ -23,24 +22,25 @@ class CreditAccountRepository extends BaseRepository
      */
     public function create(CreditAccount $account): int
     {
-        global $wpdb;
-
-        $wpdb->insert(
+        // #region agent log
+        file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'CreditAccountRepository.php:create','message'=>'Creating credit account','data'=>['user_id'=>$account->getUserId()],'runId'=>'run1','hypothesisId'=>'D']) . "\n", FILE_APPEND);
+        // #endregion
+        $result = $this->insert(
             $this->table,
             [
                 'user_id' => $account->getUserId(),
                 'credit_limit' => $account->getCreditLimit(),
-                'used_amount' => $account->getUsedAmount(),
-                'available_amount' => $account->getAvailableAmount(),
-                'installment_count' => $account->getInstallmentCount(),
-                'monthly_installment_amount' => $account->getMonthlyInstallmentAmount(),
+                'available_credit' => $account->getAvailableCredit(),
                 'status' => $account->getStatus(),
+                'installment_plan_id' => $account->getInstallmentMonths(),
                 'created_at' => current_time('mysql'),
             ],
-            ['%d', '%f', '%f', '%f', '%d', '%f', '%s', '%s']
+            ['%d', '%f', '%f', '%s', '%d', '%s']
         );
-
-        return (int) $wpdb->insert_id;
+        // #region agent log
+        file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'CreditAccountRepository.php:create','message'=>'Credit account creation result','data'=>['result'=>$result,'error'=>$this->lastError()],'runId'=>'run1','hypothesisId'=>'D']) . "\n", FILE_APPEND);
+        // #endregion
+        return $result;
     }
 
     /**
@@ -48,14 +48,17 @@ class CreditAccountRepository extends BaseRepository
      */
     public function findByUserId(int $userId): ?CreditAccount
     {
-        global $wpdb;
-
-        $row = $wpdb->get_row(
-            $wpdb->prepare("SELECT * FROM {$this->table} WHERE user_id = %d LIMIT 1", $userId),
-            ARRAY_A
+        // #region agent log
+        file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'CreditAccountRepository.php:findByUserId','message'=>'Finding credit account by user ID','data'=>['user_id'=>$userId],'runId'=>'run1','hypothesisId'=>'E']) . "\n", FILE_APPEND);
+        // #endregion
+        $row = $this->getRow(
+            "SELECT * FROM {$this->table} WHERE user_id = %d LIMIT 1",
+            [$userId]
         );
-
-        return $row ? $this->mapRowToEntity($row) : null;
+        // #region agent log
+        file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'CreditAccountRepository.php:findByUserId','message'=>'Find result','data'=>['found'=>$row!==null],'runId'=>'run1','hypothesisId'=>'E']) . "\n", FILE_APPEND);
+        // #endregion
+        return $row ? $this->mapRowToEntity((array)$row) : null;
     }
 
     /**
@@ -63,37 +66,55 @@ class CreditAccountRepository extends BaseRepository
      */
     public function update(CreditAccount $account): bool
     {
-        global $wpdb;
-
-        return (bool) $wpdb->update(
+        // #region agent log
+        file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'CreditAccountRepository.php:update','message'=>'Updating credit account','data'=>['account_id'=>$account->getId()],'runId'=>'run1','hypothesisId'=>'F']) . "\n", FILE_APPEND);
+        // #endregion
+        $data = [
+            'available_credit' => $account->getAvailableCredit(),
+            'status' => $account->getStatus(),
+        ];
+        $formats = ['%f', '%s'];
+        
+        // Add updated_at if column exists (check migration)
+        if ($account->getActivatedAt()) {
+            $data['activated_at'] = $account->getActivatedAt()->format('Y-m-d H:i:s');
+            $formats[] = '%s';
+        }
+        
+        $result = parent::update(
             $this->table,
-            [
-                'used_amount' => $account->getUsedAmount(),
-                'available_amount' => $account->getAvailableAmount(),
-                'status' => $account->getStatus(),
-                'updated_at' => current_time('mysql'),
-            ],
+            $data,
             ['id' => $account->getId()],
-            ['%f', '%f', '%s', '%s'],
+            $formats,
             ['%d']
         );
+        // #region agent log
+        file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'CreditAccountRepository.php:update','message'=>'Update result','data'=>['result'=>$result,'error'=>$this->lastError()],'runId'=>'run1','hypothesisId'=>'F']) . "\n", FILE_APPEND);
+        // #endregion
+        return $result;
     }
     /**
      * lock credit amount or settled insttalment
      */
     public function lockCredit(int $userId, float $amount): bool
     {
-        global $wpdb;
-
+        // #region agent log
+        file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'CreditAccountRepository.php:lockCredit','message'=>'Locking credit','data'=>['user_id'=>$userId,'amount'=>$amount],'runId'=>'run1','hypothesisId'=>'G']) . "\n", FILE_APPEND);
+        // #endregion
         $account = $this->findByUserId($userId);
-        if (!$account || $account->getAvailableAmount() < $amount) {
+        if (!$account || $account->getAvailableCredit() < $amount) {
+            // #region agent log
+            file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'CreditAccountRepository.php:lockCredit','message'=>'Lock credit failed - insufficient funds or account not found','data'=>['account_found'=>$account!==null,'available'=>$account?->getAvailableCredit()],'runId'=>'run1','hypothesisId'=>'G']) . "\n", FILE_APPEND);
+            // #endregion
             return false;
         }
 
-        $account->setUsedAmount($account->getUsedAmount() + $amount);
-        $account->setAvailableAmount($account->getAvailableAmount() - $amount);
-
-        return $this->update($account);
+        $account->lockCredit($amount);
+        $result = $this->update($account);
+        // #region agent log
+        file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'CreditAccountRepository.php:lockCredit','message'=>'Lock credit result','data'=>['result'=>$result],'runId'=>'run1','hypothesisId'=>'G']) . "\n", FILE_APPEND);
+        // #endregion
+        return $result;
     }
 
     /**
@@ -101,36 +122,92 @@ class CreditAccountRepository extends BaseRepository
      */
     public function releaseCredit(int $userId, float $amount): bool
     {
-        global $wpdb;
-
+        // #region agent log
+        file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'CreditAccountRepository.php:releaseCredit','message'=>'Releasing credit','data'=>['user_id'=>$userId,'amount'=>$amount],'runId'=>'run1','hypothesisId'=>'H']) . "\n", FILE_APPEND);
+        // #endregion
         $account = $this->findByUserId($userId);
         if (!$account) {
+            // #region agent log
+            file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'CreditAccountRepository.php:releaseCredit','message'=>'Release credit failed - account not found','data'=>[],'runId'=>'run1','hypothesisId'=>'H']) . "\n", FILE_APPEND);
+            // #endregion
             return false;
         }
 
         $account->setUsedAmount(max(0, $account->getUsedAmount() - $amount));
         $account->setAvailableAmount($account->getAvailableAmount() + $amount);
 
-        return $this->update($account);
+        $result = $this->update($account);
+        // #region agent log
+        file_put_contents(__DIR__ . '/../../../../.cursor/debug.log', json_encode(['id'=>'log_' . time() . '_' . uniqid(),'timestamp'=>time()*1000,'location'=>'CreditAccountRepository.php:releaseCredit','message'=>'Release credit result','data'=>['result'=>$result],'runId'=>'run1','hypothesisId'=>'H']) . "\n", FILE_APPEND);
+        // #endregion
+        return $result;
     }
 
     /**
      * enter the row of amount database in CreditAccount
      */
-    protected function mapRowToEntity(array $row): CreditAccount
+    protected function mapRowToEntity(array|object $row): CreditAccount
     {
-        $account = new CreditAccount();
-        $account->setId((int) $row['id']);
-        $account->setUserId((int) $row['user_id']);
-        $account->setCreditLimit((float) $row['credit_limit']);
-        $account->setUsedAmount((float) $row['used_amount']);
-        $account->setAvailableAmount((float) $row['available_amount']);
-        $account->setInstallmentCount((int) $row['installment_count']);
-        $account->setMonthlyInstallmentAmount((float) $row['monthly_installment_amount']);
-        $account->setStatus($row['status']);
-        $account->setCreatedAt($row['created_at']);
-        $account->setUpdatedAt($row['updated_at'] ?? null);
+        $row = (array) $row;
+        return CreditAccount::fromArray($row);
+    }
 
-        return $account;
+    /**
+     * Alias for findByUserId for service compatibility
+     */
+    public function getByUserIdForUpdate(int $userId): ?CreditAccount
+    {
+        return $this->findByUserId($userId);
+    }
+
+    /**
+     * Lock amount (alias for lockCredit for service compatibility)
+     */
+    public function lockAmount(int $accountId, float $amount): bool
+    {
+        $account = $this->findById($accountId);
+        if (!$account) {
+            return false;
+        }
+        return $this->lockCredit($account->getUserId(), $amount);
+    }
+
+    /**
+     * Consume locked amount
+     */
+    public function consumeLockedAmount(int $accountId, float $amount): bool
+    {
+        $account = $this->findById($accountId);
+        if (!$account) {
+            return false;
+        }
+        $account->consumeLockedCredit($amount);
+        return $this->update($account);
+    }
+
+    /**
+     * Find by ID
+     */
+    public function findById(int $id): ?CreditAccount
+    {
+        $row = $this->getRow(
+            "SELECT * FROM {$this->table} WHERE id = %d LIMIT 1",
+            [$id]
+        );
+        return $row ? $this->mapRowToEntity((array)$row) : null;
+    }
+
+    /**
+     * Release credit after installment payment (for service compatibility)
+     */
+    public function releaseCreditAfterInstallment(int $accountId, float $amount): bool
+    {
+        $account = $this->findById($accountId);
+        if (!$account) {
+            return false;
+        }
+        // Release locked credit back to available
+        $account->releaseLockedCredit($amount);
+        return $this->update($account);
     }
 }
