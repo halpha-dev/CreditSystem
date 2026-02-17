@@ -1,35 +1,48 @@
 <?php
-namespace CreditSystem\Database\Repositories;
 
-if (!defined('ABSPATH')) {
-    exit;
-}
+namespace CreditSystem\Includes\Database\Repositories;
+
+use wpdb;
 
 /**
- * Class BaseRepository
+ * Base Repository
  *
- * for secure accessebility to wpdb tables
+ * پایه تمام Repositoryهای سیستم اعتباری
+ * شامل متدهای استاندارد CRUD با پشتیبانی از prepared statements
  */
-abstract class BaseRepository
+class BaseRepository
 {
-    protected \wpdb $db;
+    /** @var wpdb */
+    protected $db;
 
-    public function __construct()
+    /**
+     * Constructor with optional dependency injection
+     *
+     * @param wpdb|null $db
+     */
+    public function __construct(?wpdb $db = null)
     {
-        global $wpdb;
-        $this->db = $wpdb;
+        $this->db = $db ?? $GLOBALS['wpdb'];
+
+        if (!$this->db instanceof wpdb) {
+            throw new \RuntimeException('wpdb instance is required for BaseRepository');
+        }
     }
 
     /**
-     * runing null query for force
+     * اجرای کوئری عمومی (برای DELETE, UPDATE, INSERT بدون بازگشت داده)
      */
-    protected function query(string $sql): bool|int
+    protected function query(string $sql, array $params = []): int|bool
     {
+        if (!empty($params)) {
+            $sql = $this->db->prepare($sql, ...$params);
+        }
+
         return $this->db->query($sql);
     }
 
     /**
-     * get a var
+     * دریافت یک مقدار تک (مثل COUNT)
      */
     protected function getVar(string $sql, array $params = []): mixed
     {
@@ -41,7 +54,7 @@ abstract class BaseRepository
     }
 
     /**
-     * get a row
+     * دریافت یک ردیف
      */
     protected function getRow(string $sql, array $params = []): ?object
     {
@@ -55,7 +68,7 @@ abstract class BaseRepository
     }
 
     /**
-     * get multiplie rows
+     * دریافت چندین ردیف
      */
     protected function getResults(string $sql, array $params = []): array
     {
@@ -67,13 +80,15 @@ abstract class BaseRepository
     }
 
     /**
-     * runing standards insert
+     * درج رکورد جدید
      */
     protected function insert(string $table, array $data, array $formats): int|false
     {
         $result = $this->db->insert($table, $data, $formats);
 
         if ($result === false) {
+            // می‌تونی اینجا لاگ کنی اگر خواستی
+            // $this->logError();
             return false;
         }
 
@@ -81,37 +96,46 @@ abstract class BaseRepository
     }
 
     /**
-     * runing standartd update
+     * به‌روزرسانی رکورد
      */
     protected function update(
         string $table,
         array $data,
         array $where,
-        array $dataFormats,
-        array $whereFormats
+        array $dataFormats = [],
+        array $whereFormats = []
     ): bool {
-        return (bool) $this->db->update(
-            $table,
-            $data,
-            $where,
-            $dataFormats,
-            $whereFormats
-        );
+        $result = $this->db->update($table, $data, $where, $dataFormats, $whereFormats);
+
+        return $result !== false;
     }
 
     /**
-     * اruning standard delete
+     * حذف رکورد
      */
-    protected function delete(string $table, array $where, array $formats): bool
+    protected function delete(string $table, array $where, array $formats = []): bool
     {
-        return (bool) $this->db->delete($table, $where, $formats);
+        $result = $this->db->delete($table, $where, $formats);
+
+        return $result !== false;
     }
 
     /**
-     * bd eror logs
+     * آخرین خطای دیتابیس
      */
     protected function lastError(): string
     {
         return (string) $this->db->last_error;
+    }
+
+    /**
+     * لاگ کردن خطا (اختیاری - بعداً می‌تونی با AuditLogger وصلش کنی)
+     */
+    protected function logError(string $context = ''): void
+    {
+        if (!empty($this->db->last_error)) {
+            error_log("[CreditSystem DB Error] {$context}: " . $this->db->last_error);
+            // یا file_put_contents اگر خواستی
+        }
     }
 }

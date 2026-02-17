@@ -17,23 +17,33 @@ define('CS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CS_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 // --------------------------------------------------
-// Autoloader 
+// Autoloader جدید با پشتیبانی Namespace (prefix: CreditSystem\)
 // --------------------------------------------------
 spl_autoload_register(function ($class) {
-    if (strpos($class, 'CS_') !== 0) return;
+    $prefix   = 'CreditSystem\\';
+    $base_dir = CS_PLUGIN_DIR;
 
-    $path = CS_PLUGIN_DIR . 'includes/' . strtolower(str_replace('CS_', '', $class)) . '.php';
-    if (file_exists($path)) {
-        require_once $path;
+    $len = strlen($prefix);
+    if (strncmp($prefix, $class, $len) !== 0) {
+        return;
+    }
+
+    $relative_class = substr($class, $len);
+    $file = $base_dir . str_replace('\\', '/', $relative_class) . '.php';
+
+    if (file_exists($file)) {
+        require_once $file;
     }
 });
+
+// --------------------------------------------------
 
 // --------------------------------------------------
 // Activation / Deactivation
 // --------------------------------------------------
 register_activation_hook(__FILE__, ['CS_Installer', 'activate']);
 register_deactivation_hook(__FILE__, ['CS_Installer', 'deactivate']);
-d
+
 // --------------------------------------------------
 // Bootstrap Core
 // --------------------------------------------------
@@ -43,11 +53,13 @@ add_action('plugins_loaded', function () {
     load_plugin_textdomain('credit-system', false, dirname(plugin_basename(__FILE__)) . '/languages');
 
     // core
-    CS_Core::instance();
+    if (class_exists('CreditSystem\\Core') || class_exists('CS_Core')) {
+        CS_Core::instance();   // یا نسخه namespaced اگر ساختی
+    }
 });
 
 // --------------------------------------------------
-// Helper (for fast accessibility)
+// Helper
 // --------------------------------------------------
 function cs() {
     return CS_Core::instance();
