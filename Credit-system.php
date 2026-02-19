@@ -44,6 +44,15 @@ spl_autoload_register(function ($class) {
 register_activation_hook(__FILE__, ['CS_Installer', 'activate']);
 register_deactivation_hook(__FILE__, ['CS_Installer', 'deactivate']);
 
+//register Menu 
+
+define('CS_UI_PATH', plugin_dir_path(__FILE__) . 'ui/');
+
+require_once plugin_dir_path(__FILE__) . 'includes/admin-menu.php';
+require_once plugin_dir_path(__FILE__) . 'includes/user-router.php';
+require_once plugin_dir_path(__FILE__) . 'includes/merchant-router.php';
+
+
 // --------------------------------------------------
 // Bootstrap Core
 // --------------------------------------------------
