@@ -3,8 +3,8 @@
  * Installment Plans Management - Admin
  */
 
-use CreditSystem\Includes\Services\InstallmentPlanService;
-use CreditSystem\Includes\Security\PermissionPolicy;
+use CreditSystem\Includes\services\InstallmentPlanService;
+use CreditSystem\Includes\security\PermissionPolicy;
 
 if (!defined('ABSPATH')) exit;
 

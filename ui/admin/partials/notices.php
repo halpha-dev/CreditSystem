@@ -109,7 +109,7 @@ if ($is_admin || $is_merchant) {
 }
 
 /**
- * 4. Reminder Cron Check
+ * 4. Reminder cron Check
  */
 if ($is_admin) {
 
@@ -117,7 +117,7 @@ if ($is_admin) {
 
     if (!$next_cron) {
         cs_admin_notice(
-            "کرون یادآوری اقساط فعال نیست. بررسی Cron پیشنهاد می‌شود.",
+            "کرون یادآوری اقساط فعال نیست. بررسی cron پیشنهاد می‌شود.",
             'error'
         );
     }

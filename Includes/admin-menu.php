@@ -1,82 +1,128 @@
 <?php
+/**
+ * Credit System - Admin Menu
+ *
+ * نسخه نهایی و کاملاً فیکس‌شده - ۲۴ فوریه ۲۰۲۶
+ */
+
 if (!defined('ABSPATH')) {
-    exit;
+    exit; // امنیت مستقیم
 }
 
-add_action('admin_menu', 'cs_register_admin_menus');
+/* =============================================
+   Safeguard ثابت‌ها (حتی اگر CS_Core دیر لود بشه)
+   ============================================= */
+if (!defined('CS_UI_DIR')) {
+    if (defined('CS_PLUGIN_DIR')) {
+        define('CS_UI_DIR', CS_PLUGIN_DIR . 'ui/');
+    } else {
+        // fallback امن
+        define('CS_UI_DIR', plugin_dir_path(dirname(__FILE__)) . 'ui/');
+    }
+}
 
-function cs_register_admin_menus() {
+if (!defined('CS_UI_DIR') || !is_dir(CS_UI_DIR)) {
+    wp_die('Credit System Error: مسیر UI پیدا نشد. لطفاً CS_Core.php و constants.php را چک کنید.');
+}
+
+/**
+ * ثبت منوی ادمین
+ */
+function cs_register_admin_menu(): void
+{
+    $parent_slug = 'credit-system';
 
     add_menu_page(
-        'سیستم اقساط',
-        'سیستم اقساط',
+        __('سیستم اعتبار', 'credit-system'),
+        __('سیستم اعتبار', 'credit-system'),
         'manage_options',
-        'cs-dashboard',
-        'cs_render_admin_dashboard',
+        $parent_slug,
+        'cs_render_admin_page',
         'dashicons-money-alt',
-        6
+        58
     );
 
     $submenus = [
-        'dashboard'          => ['داشبورد', 'cs_render_admin_dashboard'],
-        'kyc-list'           => ['احراز هویت', 'cs_render_kyc_list'],
-        'installment-plans'  => ['پلن‌های اقساط', 'cs_render_installment_plans'],
-        'merchants'          => ['فروشندگان', 'cs_render_merchants'],
-        'transactions'       => ['تراکنش‌ها', 'cs_render_transactions'],
-        'penalties'          => ['جریمه‌ها', 'cs_render_penalties'],
-        'reminders'          => ['یادآوری‌ها', 'cs_render_reminders'],
-        'credit-codes'       => ['کردیت کدها', 'cs_render_credit_codes'],
-        'settings'           => ['تنظیمات', 'cs_render_settings'],
+        ['dashboard',          __('داشبورد', 'credit-system'),          'dashboard.php'],
+        ['credit-codes',       __('کدهای اعتبار', 'credit-system'),     'credit-codes.php'],
+        ['credit-code-create', __('ایجاد کد جدید', 'credit-system'),    'credit-code-create.php'],
+        ['transactions',       __('تراکنش‌ها', 'credit-system'),        'transactions.php'],
+        ['merchants',          __('فروشندگان', 'credit-system'),         'merchants.php'],
+        ['installment-plans',  __('برنامه‌های قسطی', 'credit-system'), 'installment-plans.php'],
+        ['kyc-list',           __('درخواست‌های KYC', 'credit-system'),  'kyc-list.php'],
+        ['penalties',          __('جریمه‌ها', 'credit-system'),         'penalties.php'],
+        ['reminders',          __('یادآوری‌ها', 'credit-system'),       'reminders.php'],
+        ['settings',           __('تنظیمات', 'credit-system'),          'settings.php'],
     ];
 
-    foreach ($submenus as $slug => $data) {
+    foreach ($submenus as $menu) {
         add_submenu_page(
-            'cs-dashboard',
-            $data[0],
-            $data[0],
+            $parent_slug,
+            $menu[1],
+            $menu[1],
             'manage_options',
-            'cs-' . $slug,
-            $data[1]
+            $parent_slug . '-' . $menu[0],
+            'cs_render_admin_page'
         );
     }
 }
 
-/* ===============================
-   Render Functions
-================================= */
+/**
+ * رندر صفحه ادمین (همه صفحات)
+ */
+function cs_render_admin_page(): void
+{
+    $page      = isset($_GET['page']) ? sanitize_key($_GET['page']) : 'credit-system-dashboard';
+    $page_slug = str_replace('credit-system-', '', $page);
+    
+    if (empty($page_slug) || $page_slug === 'credit-system') {
+        $page_slug = 'dashboard';
+    }
 
-function cs_render_admin_dashboard() {
-    include CS_UI_PATH . 'admin/pages/dashboard.php';
+    $page_map = [
+        'dashboard'          => 'dashboard.php',
+        'credit-codes'       => 'credit-codes.php',
+        'credit-code-create' => 'credit-code-create.php',
+        'transactions'       => 'transactions.php',
+        'merchants'          => 'merchants.php',
+        'installment-plans'  => 'installment-plans.php',
+        'kyc-list'           => 'kyc-list.php',
+        'penalties'          => 'penalties.php',
+        'reminders'          => 'reminders.php',
+        'settings'           => 'settings.php',
+        'kyc-details'        => 'kyc-details.php',
+    ];
+
+    $file_name = $page_map[$page_slug] ?? 'dashboard.php';
+    $file_path = CS_UI_DIR . 'admin/pages/' . $file_name;
+
+    // هدر و نوتیس و سایدبار مشترک
+    $partials = [
+        'notices' => CS_UI_DIR . 'admin/partials/notices.php',
+        'sidebar' => CS_UI_DIR . 'admin/partials/sidebar.php',
+    ];
+
+    foreach ($partials as $name => $path) {
+        if (file_exists($path)) {
+            include_once $path;
+        } else {
+            echo "<div class='notice notice-warning'><p>فایل partial {$name} پیدا نشد: <code>" . esc_html(basename($path)) . "</code></p></div>";
+        }
+    }
+
+    // صفحه اصلی
+    if (file_exists($file_path)) {
+        include $file_path;
+    } else {
+        echo '<div class="wrap">';
+        echo '<h1 class="wp-heading-inline">خطا</h1>';
+        echo '<div class="notice notice-error"><p>';
+        echo 'فایل صفحه یافت نشد: <code>' . esc_html($file_name) . '</code><br>';
+        echo 'مسیر چک شده: <code>' . esc_html($file_path) . '</code>';
+        echo '</p></div>';
+        echo '</div>';
+    }
 }
 
-function cs_render_kyc_list() {
-    include CS_UI_PATH . 'admin/pages/kyc-list.php';
-}
-
-function cs_render_installment_plans() {
-    include CS_UI_PATH . 'admin/pages/installment-plans.php';
-}
-
-function cs_render_merchants() {
-    include CS_UI_PATH . 'admin/pages/merchants.php';
-}
-
-function cs_render_transactions() {
-    include CS_UI_PATH . 'admin/pages/transactions.php';
-}
-
-function cs_render_penalties() {
-    include CS_UI_PATH . 'admin/pages/penalties.php';
-}
-
-function cs_render_reminders() {
-    include CS_UI_PATH . 'admin/pages/reminders.php';
-}
-
-function cs_render_credit_codes() {
-    include CS_UI_PATH . 'admin/pages/credit-codes.php';
-}
-
-function cs_render_settings() {
-    include CS_UI_PATH . 'admin/pages/settings.php';
-}
+// ثبت هوک
+add_action('admin_menu', 'cs_register_admin_menu');

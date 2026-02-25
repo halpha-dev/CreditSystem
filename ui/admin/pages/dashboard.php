@@ -1,83 +1,155 @@
 <?php
-require_once __DIR__ . '/../../partials/header.php';
-require_once __DIR__ . '/../../partials/sidebar.php';
-require_once __DIR__ . '/../../partials/notices.php';
+/**
+ * Credit System - Admin Dashboard
+ *
+ * نسخه نهایی، تمیز و کاملاً سازگار - ۲۵ فوریه ۲۰۲۶
+ */
 
-if (!is_admin()) {
-    die('دسترسی غیرمجاز');
+if (!defined('ABSPATH')) {
+    exit;
 }
 
-global $pdo;
+/* =============================================
+   لود امن constants (حل کامل مشکل undefined)
+   ============================================= */
+if (!defined('CS_TABLE_CREDITS')) {
+    $constants_path = plugin_dir_path(dirname(__FILE__, 3)) . 'config/constants.php';
+    if (file_exists($constants_path)) {
+        require_once $constants_path;
+    } else {
+        wp_die('Credit System Error: فایل constants.php پیدا نشد!');
+    }
+}
+
+// Safeguard مسیر UI
+if (!defined('CS_UI_DIR')) {
+    define('CS_UI_DIR', plugin_dir_path(dirname(__FILE__, 3)) . 'ui/');
+}
+
+/* =============================================
+   Requireهای مشترک
+   ============================================= */
+require_once CS_UI_DIR . 'admin/partials/header.php';
+require_once CS_UI_DIR . 'admin/partials/sidebar.php';
+require_once CS_UI_DIR . 'admin/partials/notices.php';
+
+if (!current_user_can('manage_options')) {
+    wp_die(__('شما مجوز دسترسی به این صفحه را ندارید.', 'credit-system'));
+}
+
+global $wpdb;
 
 /* =========================
-   آمار کلی
+   آمار داشبورد - با ثابت‌های امن
 ========================= */
 
-// کاربران
-$total_users = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'user'")->fetchColumn();
-$total_merchants = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'merchant'")->fetchColumn();
-$total_admins = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'admin'")->fetchColumn();
+// اعتبار کاربران
+$total_credit          = $wpdb->get_var("SELECT COALESCE(SUM(available_credit), 0) FROM " . CS_TABLE_CREDITS);
+$total_active_accounts = $wpdb->get_var("SELECT COUNT(*) FROM " . CS_TABLE_CREDITS . " WHERE status = 'active'");
+
+// کدهای اعتبار
+$total_codes     = $wpdb->get_var("SELECT COUNT(*) FROM " . CS_TABLE_CODES);
+$active_codes    = $wpdb->get_var("
+    SELECT COUNT(*) FROM " . CS_TABLE_CODES . "
+    WHERE status = '" . CS_CODE_STATUS_UNUSED . "' AND expires_at > NOW()
+");
+$expired_codes   = $wpdb->get_var("SELECT COUNT(*) FROM " . CS_TABLE_CODES . " WHERE expires_at < NOW()");
+
+// تراکنش‌ها و فروش
+$total_transactions    = $wpdb->get_var("SELECT COUNT(*) FROM " . CS_TABLE_TRANSACTIONS);
+$completed_transactions = $wpdb->get_var("
+    SELECT COUNT(*) FROM " . CS_TABLE_TRANSACTIONS . "
+    WHERE status = '" . CS_TX_STATUS_COMPLETED . "'
+");
+$total_sales = $wpdb->get_var("
+    SELECT COALESCE(SUM(amount), 0) FROM " . CS_TABLE_TRANSACTIONS . "
+    WHERE status = '" . CS_TX_STATUS_COMPLETED . "'
+");
+
+// مرچنت‌ها
+$total_merchants = $wpdb->get_var("SELECT COUNT(*) FROM " . CS_TABLE_MERCHANTS);
 
 // KYC
-$kyc_pending = $pdo->query("SELECT COUNT(*) FROM kyc_requests WHERE status = 'pending'")->fetchColumn();
-$kyc_approved = $pdo->query("SELECT COUNT(*) FROM kyc_requests WHERE status = 'approved'")->fetchColumn();
-$kyc_rejected = $pdo->query("SELECT COUNT(*) FROM kyc_requests WHERE status = 'rejected'")->fetchColumn();
+$kyc_pending   = $wpdb->get_var("SELECT COUNT(*) FROM " . CS_TABLE_KYC_REQUESTS . " WHERE status = '" . CS_KYC_STATUS_PENDING . "'");
+$kyc_approved  = $wpdb->get_var("SELECT COUNT(*) FROM " . CS_TABLE_KYC_REQUESTS . " WHERE status = '" . CS_KYC_STATUS_APPROVED . "'");
+$kyc_rejected  = $wpdb->get_var("SELECT COUNT(*) FROM " . CS_TABLE_KYC_REQUESTS . " WHERE status = '" . CS_KYC_STATUS_REJECTED . "'");
 
-// Installments
-$total_installments = $pdo->query("SELECT COUNT(*) FROM installments")->fetchColumn();
-$overdue_installments = $pdo->query("SELECT COUNT(*) FROM installments WHERE status = 'overdue'")->fetchColumn();
-$active_plans = $pdo->query("SELECT COUNT(*) FROM installment_plans WHERE status = 'active'")->fetchColumn();
-
-// Penalties
-$total_penalties = $pdo->query("SELECT COUNT(*) FROM penalties")->fetchColumn();
-$unpaid_penalties = $pdo->query("SELECT COUNT(*) FROM penalties WHERE status = 'unpaid'")->fetchColumn();
-
-// Reminders
-$pending_reminders = $pdo->query("SELECT COUNT(*) FROM reminders WHERE status = 'pending'")->fetchColumn();
-
-// Credit Codes
-$total_credit_codes = $pdo->query("SELECT COUNT(*) FROM credit_codes")->fetchColumn();
-$active_credit_codes = $pdo->query("SELECT COUNT(*) FROM credit_codes WHERE status = 'active'")->fetchColumn();
-$expired_credit_codes = $pdo->query("SELECT COUNT(*) FROM credit_codes WHERE expires_at < NOW()")->fetchColumn();
-
-// فروش کل
-$total_sales = $pdo->query("SELECT SUM(total_amount) FROM transactions WHERE status = 'completed'")->fetchColumn();
+// اقساط
+$total_installments   = $wpdb->get_var("SELECT COUNT(*) FROM " . CS_TABLE_INSTALLMENTS);
+$overdue_installments = $wpdb->get_var("
+    SELECT COUNT(*) FROM " . CS_TABLE_INSTALLMENTS . "
+    WHERE due_date < NOW() AND status != 'paid'
+");
+$active_plans = $wpdb->get_var("SELECT COUNT(*) FROM " . CS_TABLE_INSTALL_PLANS . " WHERE status = 'active'");
 ?>
 
-<div class="admin-dashboard">
+<div class="admin-dashboard wrap">
 
-    <h1>داشبورد مدیریت سیستم اقساط</h1>
+    <h1 class="wp-heading-inline">
+        <span class="dashicons dashicons-money-alt"></span>
+        داشبورد سیستم اعتبار
+    </h1>
 
-    <!-- آمار نقش‌ها -->
+    <!-- آمار کلی -->
     <div class="card-grid">
         <div class="card">
-            <h3>کاربران</h3>
-            <p><?php echo number_format($total_users); ?></p>
+            <h3>اعتبار کل کاربران</h3>
+            <p class="big-number"><?php echo number_format($total_credit); ?> <small>تومان</small></p>
         </div>
         <div class="card">
-            <h3>فروشندگان</h3>
-            <p><?php echo number_format($total_merchants); ?></p>
+            <h3>حساب‌های فعال</h3>
+            <p class="big-number"><?php echo number_format($total_active_accounts); ?></p>
         </div>
         <div class="card">
-            <h3>ادمین‌ها</h3>
-            <p><?php echo number_format($total_admins); ?></p>
+            <h3>مرچنت‌ها</h3>
+            <p class="big-number"><?php echo number_format($total_merchants); ?></p>
         </div>
     </div>
 
     <!-- KYC -->
-    <h2>KYC</h2>
+    <h2>KYC درخواست‌ها</h2>
     <div class="card-grid">
         <div class="card warning">
             <h3>در انتظار بررسی</h3>
-            <p><?php echo $kyc_pending; ?></p>
+            <p><?php echo number_format($kyc_pending); ?></p>
         </div>
         <div class="card success">
             <h3>تایید شده</h3>
-            <p><?php echo $kyc_approved; ?></p>
+            <p><?php echo number_format($kyc_approved); ?></p>
         </div>
         <div class="card danger">
             <h3>رد شده</h3>
-            <p><?php echo $kyc_rejected; ?></p>
+            <p><?php echo number_format($kyc_rejected); ?></p>
+        </div>
+    </div>
+
+    <!-- کدهای اعتبار -->
+    <h2>کدهای اعتبار</h2>
+    <div class="card-grid">
+        <div class="card">
+            <h3>کل کدها</h3>
+            <p><?php echo number_format($total_codes); ?></p>
+        </div>
+        <div class="card success">
+            <h3>فعال</h3>
+            <p><?php echo number_format($active_codes); ?></p>
+        </div>
+        <div class="card danger">
+            <h3>منقضی شده</h3>
+            <p><?php echo number_format($expired_codes); ?></p>
+        </div>
+    </div>
+
+    <!-- گردش مالی -->
+    <h2>گردش مالی</h2>
+    <div class="card-grid">
+        <div class="card highlight">
+            <h3>تراکنش‌های تکمیل‌شده</h3>
+            <p><?php echo number_format($completed_transactions); ?></p>
+        </div>
+        <div class="card highlight">
+            <h3>مجموع فروش</h3>
+            <p><?php echo number_format($total_sales); ?> تومان</p>
         </div>
     </div>
 
@@ -86,62 +158,23 @@ $total_sales = $pdo->query("SELECT SUM(total_amount) FROM transactions WHERE sta
     <div class="card-grid">
         <div class="card">
             <h3>کل اقساط</h3>
-            <p><?php echo $total_installments; ?></p>
+            <p><?php echo number_format($total_installments); ?></p>
         </div>
         <div class="card danger">
             <h3>اقساط معوق</h3>
-            <p><?php echo $overdue_installments; ?></p>
+            <p><?php echo number_format($overdue_installments); ?></p>
         </div>
         <div class="card">
             <h3>پلن‌های فعال</h3>
-            <p><?php echo $active_plans; ?></p>
+            <p><?php echo number_format($active_plans); ?></p>
         </div>
-    </div>
-
-    <!-- جریمه -->
-    <h2>جریمه‌ها</h2>
-    <div class="card-grid">
-        <div class="card">
-            <h3>کل جریمه‌ها</h3>
-            <p><?php echo $total_penalties; ?></p>
-        </div>
-        <div class="card danger">
-            <h3>جریمه پرداخت نشده</h3>
-            <p><?php echo $unpaid_penalties; ?></p>
-        </div>
-    </div>
-
-    <!-- یادآوری -->
-    <h2>یادآوری‌ها</h2>
-    <div class="card">
-        <h3>در انتظار ارسال</h3>
-        <p><?php echo $pending_reminders; ?></p>
-    </div>
-
-    <!-- Credit Code -->
-    <h2>کردیت کد</h2>
-    <div class="card-grid">
-        <div class="card">
-            <h3>کل کدها</h3>
-            <p><?php echo $total_credit_codes; ?></p>
-        </div>
-        <div class="card success">
-            <h3>فعال</h3>
-            <p><?php echo $active_credit_codes; ?></p>
-        </div>
-        <div class="card danger">
-            <h3>منقضی شده</h3>
-            <p><?php echo $expired_credit_codes; ?></p>
-        </div>
-    </div>
-
-    <!-- فروش -->
-    <h2>گردش مالی</h2>
-    <div class="card highlight">
-        <h3>مجموع فروش تکمیل شده</h3>
-        <p><?php echo number_format($total_sales); ?> تومان</p>
     </div>
 
 </div>
 
-<?php require_once __DIR__ . '/../../partials/footer.php'; ?>
+<?php
+// فوتر مشترک
+if (file_exists(CS_UI_DIR . 'admin/partials/footer.php')) {
+    require_once CS_UI_DIR . 'admin/partials/footer.php';
+}
+?>

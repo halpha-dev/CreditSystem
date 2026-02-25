@@ -1,66 +1,92 @@
 <?php
-require_once __DIR__ . '/../partials/header.php';
-require_once __DIR__ . '/../partials/sidebar.php';
-require_once __DIR__ . '/../partials/notices.php';
+/**
+ * Credit System - Transactions Page
+ *
+ * نسخه نهایی و کاملاً فیکس‌شده - ۲۵ فوریه ۲۰۲۶
+ */
 
-if (!is_admin()) {
-    die('دسترسی غیرمجاز');
+if (!defined('ABSPATH')) {
+    exit;
 }
 
-global $pdo;
+/* =============================================
+   لود امن constants + $wpdb
+   ============================================= */
+if (!defined('CS_TABLE_TRANSACTIONS')) {
+    $constants_path = plugin_dir_path(dirname(__FILE__, 3)) . 'config/constants.php';
+    if (file_exists($constants_path)) {
+        require_once $constants_path;
+    } else {
+        wp_die('Credit System Error: constants.php پیدا نشد!');
+    }
+}
+
+if (!defined('CS_UI_DIR')) {
+    define('CS_UI_DIR', plugin_dir_path(dirname(__FILE__, 3)) . 'ui/');
+}
+
+/* Requireهای مشترک (فقط یک بار) */
+require_once CS_UI_DIR . 'admin/partials/header.php';
+require_once CS_UI_DIR . 'admin/partials/sidebar.php';
+require_once CS_UI_DIR . 'admin/partials/notices.php';
+
+if (!current_user_can('manage_options')) {
+    wp_die(__('شما مجوز دسترسی به این صفحه را ندارید.', 'credit-system'));
+}
+
+global $wpdb;
 
 /* =========================
    فیلتر فروشنده
 ========================= */
-
-$merchant_filter = isset($_GET['merchant_id']) ? (int)$_GET['merchant_id'] : null;
+$merchant_filter = isset($_GET['merchant_id']) ? (int)$_GET['merchant_id'] : 0;
 
 /* =========================
-   دریافت تراکنش‌ها
+   دریافت تراکنش‌ها (با $wpdb + Prepared)
 ========================= */
 
 $query = "
 SELECT t.*,
-       u.name AS user_name,
-       u.email AS user_email,
-       m.name AS merchant_name,
+       u.display_name AS user_name,
+       u.user_email AS user_email,
+       m.display_name AS merchant_name,
        p.name AS plan_name,
        p.installment_count,
        c.code AS credit_code,
        c.type AS credit_type,
        c.value AS credit_value,
-       (SELECT status FROM kyc_requests 
+       (SELECT status FROM " . CS_TABLE_KYC_REQUESTS . " 
             WHERE user_id = t.user_id 
             ORDER BY id DESC LIMIT 1) AS user_kyc_status,
-       (SELECT COUNT(*) FROM installments 
+       (SELECT COUNT(*) FROM " . CS_TABLE_INSTALLMENTS . " 
             WHERE transaction_id = t.id) AS total_installments,
-       (SELECT COUNT(*) FROM installments 
+       (SELECT COUNT(*) FROM " . CS_TABLE_INSTALLMENTS . " 
             WHERE transaction_id = t.id AND status='overdue') AS overdue_installments,
-       (SELECT COUNT(*) FROM penalties 
+       (SELECT COUNT(*) FROM " . CS_TABLE_PENALTIES . " 
             WHERE installment_id IN 
-                (SELECT id FROM installments WHERE transaction_id=t.id)
+                (SELECT id FROM " . CS_TABLE_INSTALLMENTS . " WHERE transaction_id = t.id)
             AND status='unpaid') AS unpaid_penalties
-FROM transactions t
-LEFT JOIN users u ON t.user_id = u.id
-LEFT JOIN users m ON t.merchant_id = m.id
-LEFT JOIN installment_plans p ON t.plan_id = p.id
-LEFT JOIN credit_codes c ON t.credit_code_id = c.id
+FROM " . CS_TABLE_TRANSACTIONS . " t
+LEFT JOIN " . $wpdb->users . " u ON t.user_id = u.ID
+LEFT JOIN " . $wpdb->users . " m ON t.merchant_id = m.ID
+LEFT JOIN " . CS_TABLE_INSTALL_PLANS . " p ON t.plan_id = p.id
+LEFT JOIN " . CS_TABLE_CODES . " c ON t.credit_code_id = c.id
 ";
 
-if ($merchant_filter) {
-    $query .= " WHERE t.merchant_id = " . $merchant_filter;
+if ($merchant_filter > 0) {
+    $query .= $wpdb->prepare(" WHERE t.merchant_id = %d", $merchant_filter);
 }
 
-$query .= " ORDER BY t.created_at DESC";
+$query .= " ORDER BY t.created_at DESC LIMIT 100";
 
-$transactions = $pdo->query($query)->fetchAll(PDO::FETCH_ASSOC);
+$transactions = $wpdb->get_results($query, ARRAY_A);
 ?>
 
-<div class="admin-transactions">
+<div class="admin-transactions wrap">
 
-    <h1>مدیریت تراکنش‌ها</h1>
+    <h1 class="wp-heading-inline">مدیریت تراکنش‌ها</h1>
 
-    <table class="admin-table">
+    <table class="wp-list-table widefat fixed striped admin-table">
         <thead>
         <tr>
             <th>شناسه</th>
@@ -78,104 +104,64 @@ $transactions = $pdo->query($query)->fetchAll(PDO::FETCH_ASSOC);
             <th>تاریخ</th>
         </tr>
         </thead>
-
         <tbody>
 
         <?php if (empty($transactions)): ?>
-            <tr>
-                <td colspan="13">تراکنشی یافت نشد.</td>
-            </tr>
+            <tr><td colspan="13">هیچ تراکنشی یافت نشد.</td></tr>
         <?php endif; ?>
 
         <?php foreach ($transactions as $tx): ?>
-
             <tr>
+                <td>#<?php echo esc_html($tx['id']); ?></td>
 
-                <td>#<?php echo $tx['id']; ?></td>
-
-                <!-- کاربر -->
                 <td>
-                    <?php echo htmlspecialchars($tx['user_name']); ?>
-                    <br>
-                    <small><?php echo htmlspecialchars($tx['user_email']); ?></small>
+                    <?php echo esc_html($tx['user_name'] ?? '—'); ?><br>
+                    <small><?php echo esc_html($tx['user_email'] ?? '—'); ?></small>
                 </td>
 
-                <!-- KYC -->
                 <td>
                     <span class="badge 
-                        <?php
-                        if ($tx['user_kyc_status'] === 'approved') echo 'success';
-                        elseif ($tx['user_kyc_status'] === 'pending') echo 'warning';
-                        else echo 'danger';
-                        ?>">
-                        <?php echo $tx['user_kyc_status']; ?>
+                        <?php echo $tx['user_kyc_status'] === 'approved' ? 'success' : ($tx['user_kyc_status'] === 'pending' ? 'warning' : 'danger'); ?>">
+                        <?php echo esc_html($tx['user_kyc_status'] ?? '—'); ?>
                     </span>
                 </td>
 
-                <!-- فروشنده -->
-                <td><?php echo htmlspecialchars($tx['merchant_name']); ?></td>
+                <td><?php echo esc_html($tx['merchant_name'] ?? '—'); ?></td>
 
-                <!-- پلن -->
                 <td>
-                    <?php echo htmlspecialchars($tx['plan_name']); ?>
-                    <br>
-                    <small><?php echo (int)$tx['installment_count']; ?> قسط</small>
+                    <?php echo esc_html($tx['plan_name'] ?? '—'); ?><br>
+                    <small><?php echo (int)($tx['installment_count'] ?? 0); ?> قسط</small>
                 </td>
 
-                <!-- مبلغ -->
-                <td><?php echo number_format($tx['total_amount']); ?></td>
-                <td><?php echo number_format($tx['final_amount']); ?></td>
+                <td><?php echo number_format($tx['total_amount'] ?? 0); ?></td>
+                <td><?php echo number_format($tx['final_amount'] ?? 0); ?></td>
 
-                <!-- کردیت کد -->
                 <td>
-                    <?php if ($tx['credit_code']): ?>
-                        <span class="badge success">
-                            <?php echo htmlspecialchars($tx['credit_code']); ?>
-                        </span>
-                        <br>
-                        <small>
-                            <?php echo $tx['credit_type']; ?> -
-                            <?php echo $tx['credit_value']; ?>
-                        </small>
+                    <?php if (!empty($tx['credit_code'])): ?>
+                        <span class="badge success"><?php echo esc_html($tx['credit_code']); ?></span><br>
+                        <small><?php echo esc_html($tx['credit_type'] ?? '') . ' - ' . number_format($tx['credit_value'] ?? 0); ?></small>
                     <?php else: ?>
-                        <span class="badge secondary">ندارد</span>
+                        <span class="badge secondary">بدون کد</span>
                     <?php endif; ?>
                 </td>
 
-                <!-- اقساط -->
-                <td><?php echo $tx['total_installments']; ?></td>
+                <td><?php echo (int)($tx['total_installments'] ?? 0); ?></td>
+                <td><span class="badge <?php echo ($tx['overdue_installments'] ?? 0) > 0 ? 'danger' : 'success'; ?>">
+                    <?php echo (int)($tx['overdue_installments'] ?? 0); ?>
+                </span></td>
+                <td><span class="badge <?php echo ($tx['unpaid_penalties'] ?? 0) > 0 ? 'danger' : 'success'; ?>">
+                    <?php echo (int)($tx['unpaid_penalties'] ?? 0); ?>
+                </span></td>
 
-                <!-- معوق -->
-                <td>
-                    <span class="badge <?php echo $tx['overdue_installments'] > 0 ? 'danger' : 'success'; ?>">
-                        <?php echo $tx['overdue_installments']; ?>
-                    </span>
-                </td>
-
-                <!-- جریمه -->
-                <td>
-                    <span class="badge <?php echo $tx['unpaid_penalties'] > 0 ? 'danger' : 'success'; ?>">
-                        <?php echo $tx['unpaid_penalties']; ?>
-                    </span>
-                </td>
-
-                <!-- وضعیت تراکنش -->
                 <td>
                     <span class="badge 
-                        <?php
-                        if ($tx['status'] === 'completed') echo 'success';
-                        elseif ($tx['status'] === 'pending') echo 'warning';
-                        else echo 'danger';
-                        ?>">
-                        <?php echo $tx['status']; ?>
+                        <?php echo $tx['status'] === 'completed' ? 'success' : ($tx['status'] === 'pending' ? 'warning' : 'danger'); ?>">
+                        <?php echo esc_html($tx['status'] ?? '—'); ?>
                     </span>
                 </td>
 
-                <!-- تاریخ -->
-                <td><?php echo $tx['created_at']; ?></td>
-
+                <td><?php echo esc_html($tx['created_at'] ?? '—'); ?></td>
             </tr>
-
         <?php endforeach; ?>
 
         </tbody>
@@ -183,4 +169,9 @@ $transactions = $pdo->query($query)->fetchAll(PDO::FETCH_ASSOC);
 
 </div>
 
-<?php require_once __DIR__ . '/../partials/footer.php'; ?>
+<?php
+// فوتر مشترک
+if (file_exists(CS_UI_DIR . 'admin/partials/footer.php')) {
+    require_once CS_UI_DIR . 'admin/partials/footer.php';
+}
+?>

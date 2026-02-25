@@ -1,9 +1,9 @@
 <?php
 
-namespace CreditSystem\Cron;
+namespace CreditSystem\cron;
 
 use CreditSystem\Database\Repositories\InstallmentRepository;
-use CreditSystem\Services\NotificationService;
+use CreditSystem\services\NotificationService;
 use CreditSystem\Config\Constants;
 
 if (!defined('ABSPATH')) {
@@ -22,7 +22,7 @@ class SendReminders
     }
 
     /**
-     * Cron entry point
+     * cron entry point
      */
     public function handle(): void
     {

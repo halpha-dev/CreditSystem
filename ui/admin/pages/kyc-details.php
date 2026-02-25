@@ -1,10 +1,10 @@
 <?php
 // admin/pages/kyc-details.php
 
-use CreditSystem\Includes\Services\KycService;
+use CreditSystem\Includes\services\KycService;
 use CreditSystem\Includes\Database\Repositories\KycRepository;
-use CreditSystem\Includes\Domain\KycRequest;
-use CreditSystem\Includes\Security\PermissionPolicy;
+use CreditSystem\Includes\domain\KycRequest;
+use CreditSystem\Includes\security\PermissionPolicy;
 
 if (!defined('ABSPATH')) exit;
 

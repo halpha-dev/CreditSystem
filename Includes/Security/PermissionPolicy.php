@@ -1,9 +1,9 @@
 <?php
-namespace CreditSystem\Includes\Security;
+namespace CreditSystem\Includes\security;
 
 use CreditSystem\Includes\Database\Repositories\CreditAccountRepository;
 use CreditSystem\Includes\Database\Repositories\MerchantRepository;
-use CreditSystem\Includes\Security\AuditLogger;
+use CreditSystem\Includes\security\AuditLogger;
 
 /**
  * Class PermissionPolicy

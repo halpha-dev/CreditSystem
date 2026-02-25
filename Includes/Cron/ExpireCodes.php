@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Cron;
+namespace App\cron;
 
 use App\Database\Repositories\CreditCodeRepository;
 
@@ -52,7 +52,7 @@ class ExpireCodes
     }
 
     /**
-     * Delete Cron After expire code 
+     * Delete cron After expire code 
      */
     public static function unschedule(): void
     {

@@ -3,11 +3,11 @@
  * KYC Requests List - Admin
  */
 
-use CreditSystem\Includes\Services\KycService;
-use CreditSystem\Includes\Services\CreditService;
-use CreditSystem\Includes\Services\InstallmentService;
-use CreditSystem\Includes\Services\MerchantService;
-use CreditSystem\Includes\Security\PermissionPolicy;
+use CreditSystem\Includes\services\KycService;
+use CreditSystem\Includes\services\CreditService;
+use CreditSystem\Includes\services\InstallmentService;
+use CreditSystem\Includes\services\MerchantService;
+use CreditSystem\Includes\security\PermissionPolicy;
 
 PermissionPolicy::adminOnly();
 

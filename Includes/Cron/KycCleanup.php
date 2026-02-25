@@ -1,9 +1,9 @@
 <?php
 
-namespace CreditSystem\Includes\Cron;
+namespace CreditSystem\Includes\cron;
 
 use CreditSystem\Includes\Database\Repositories\KycRepository;
-use CreditSystem\Includes\Security\AuditLogger;
+use CreditSystem\Includes\security\AuditLogger;
 
 class KycCleanup
 {

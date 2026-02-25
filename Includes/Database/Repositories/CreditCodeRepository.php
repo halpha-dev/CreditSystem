@@ -93,7 +93,7 @@ class CreditCodeRepository extends BaseRepository
 
     /**
      * expire old and unused codes
-     * (for Cron)
+     * (for cron)
      */
     public function expireOldCodes(): int
     {

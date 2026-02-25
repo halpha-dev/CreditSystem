@@ -1,6 +1,6 @@
 <?php
 
-namespace CreditSystem\Security;
+namespace CreditSystem\security;
 
 if (!defined('ABSPATH')) {
     exit;

@@ -1,5 +1,5 @@
 <?php
-namespace CreditSystem\Domain;
+namespace CreditSystem\domain;
 
 if (!defined('ABSPATH')) {
     exit;

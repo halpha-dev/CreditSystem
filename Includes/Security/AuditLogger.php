@@ -1,5 +1,5 @@
 <?php
-namespace CreditSystem\Security;
+namespace CreditSystem\security;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -8,7 +8,7 @@ if (!defined('ABSPATH')) {
 /**
  * Class AuditLogger
  *
- * Log Security Events 
+ * Log security Events 
  */
 class AuditLogger
 {
@@ -66,7 +66,7 @@ class AuditLogger
     }
 
     /**
-     * Log Security Events (Up Levels)
+     * Log security Events (Up Levels)
      *
      * @param string $action
      * @param string $message
@@ -88,7 +88,7 @@ class AuditLogger
     }
 
     /**
-     * insert Log for API
+     * insert Log for api
      *
      * @param string $endpoint
      * @param string $method

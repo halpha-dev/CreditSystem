@@ -93,33 +93,56 @@ class CS_Installer {
     /**
      * افزودن نقش‌ها و قابلیت‌های پیش‌فرض
      */
+       /**
+     * افزودن نقش‌ها و قابلیت‌های پیش‌فرض
+     */
     private static function add_default_roles_and_caps(): void
     {
-        // نقش مرچنت
+        // ────── نقش Merchant (فروشنده / مرچنت) ──────
         if (!get_role('cs_merchant')) {
             add_role(
                 'cs_merchant',
                 'مرچنت سیستم اعتبار',
                 [
-                    'read'                    => true,
-                    'edit_posts'              => false,
-                    'manage_credit_codes'     => true,
+                    'read'                        => true,
+                    'manage_credit_codes'         => true,   // مدیریت کدهای اعتبار
+                    'view_merchant_transactions'  => true,
+                    'manage_own_installments'     => true,
                 ]
             );
         }
 
-        // اضافه کردن قابلیت به ادمین
+        // ────── نقش Credit User (کاربر اعتباری معمولی) ──────
+        if (!get_role('cs_credit_user')) {
+            add_role(
+                'cs_credit_user',
+                'کاربر اعتباری',
+                [
+                    'read'                        => true,
+                    'view_own_credit'             => true,   // دیدن اعتبار خود
+                    'use_credit_codes'            => true,   // استفاده از کدهای شارژ
+                    'view_own_transactions'       => true,
+                    'view_own_installments'       => true,
+                    'submit_kyc'                  => true,   // ارسال مدارک KYC
+                ]
+            );
+        }
+
+        // ────── اضافه کردن قابلیت‌ها به ادمین ──────
         $admin_role = get_role('administrator');
         if ($admin_role) {
-            $caps = [
+            $admin_caps = [
                 'manage_credit_system',
                 'manage_cs_merchants',
                 'manage_cs_kyc',
                 'manage_cs_installments',
-                'manage_cs_transactions'
+                'manage_cs_transactions',
+                'manage_cs_codes'
             ];
-            foreach ($caps as $cap) {
-                $admin_role->add_cap($cap);
+            foreach ($admin_caps as $cap) {
+                if (!$admin_role->has_cap($cap)) {
+                    $admin_role->add_cap($cap);
+                }
             }
         }
     }

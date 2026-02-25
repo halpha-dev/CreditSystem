@@ -1,16 +1,16 @@
 <?php
 
-namespace CreditSystem\Cron;
+namespace CreditSystem\cron;
 
-use CreditSystem\Cron\ExpireCodes;
-use CreditSystem\Cron\ApplyPenalties;
-use CreditSystem\Cron\SendReminders;
+use CreditSystem\cron\ExpireCodes;
+use CreditSystem\cron\ApplyPenalties;
+use CreditSystem\cron\SendReminders;
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-class CronManager
+class cronManager
 {
     /**
      * Register WordPress cron hooks
@@ -67,7 +67,7 @@ class CronManager
         if (defined('WP_DEBUG') && WP_DEBUG) {
             error_log(
                 sprintf(
-                    '[CreditSystem Cron Error] %s | %s | %s',
+                    '[CreditSystem cron Error] %s | %s | %s',
                     $jobName,
                     $exception->getMessage(),
                     $exception->getTraceAsString()

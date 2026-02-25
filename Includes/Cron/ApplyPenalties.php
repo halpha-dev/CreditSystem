@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Cron;
+namespace App\cron;
 
 use App\Database\Repositories\InstallmentRepository;
 use App\Config\Constants;

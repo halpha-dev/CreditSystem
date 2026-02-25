@@ -1,5 +1,5 @@
 <?php
-namespace CreditSystem\Security;
+namespace CreditSystem\security;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -8,7 +8,7 @@ if (!defined('ABSPATH')) {
 /**
  * Class Nonce
  *
- * مدیریت nonce های امنیتی برای API، فرم‌ها و درخواست‌های حساس
+ * مدیریت nonce های امنیتی برای api، فرم‌ها و درخواست‌های حساس
  */
 class Nonce
 {

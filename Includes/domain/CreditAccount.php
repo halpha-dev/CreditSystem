@@ -1,6 +1,6 @@
 <?php
 
-namespace CreditSystem\Includes\Domain;
+namespace CreditSystem\Includes\domain;
 
 use DateTimeImmutable;
 use InvalidArgumentException;
