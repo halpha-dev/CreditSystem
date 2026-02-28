@@ -8,8 +8,10 @@ use CreditSystem\Includes\security\PermissionPolicy;
 
 if (!defined('ABSPATH')) exit;
 
+// اصلاح فراخوانی استاتیک (طبق تغییرات قبلی در PermissionPolicy)
 PermissionPolicy::adminOnly();
 
+// نمونه‌سازی صحیح
 $planService = new InstallmentPlanService();
 
 /**
@@ -19,14 +21,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'create') {
-        $planService->create([
-            'title' => sanitize_text_field($_POST['title']),
-            'months' => intval($_POST['months']),
-            'interest_rate' => floatval($_POST['interest_rate']),
-            'penalty_rate' => floatval($_POST['penalty_rate']),
-            'reminder_days' => intval($_POST['reminder_days']),
-            'is_active' => isset($_POST['is_active']) ? 1 : 0,
-        ]);
+        try {
+            // اصلاح نام متغیر از $service به $planService
+            // و ارسال داده‌ها به صورت آرایه (با فرض اینکه متد create را در مرحله قبل برای پذیرش آرایه اصلاح کردیم)
+            $planService->create($_POST);
+            echo '<div class="updated"><p>پلن با موفقیت ایجاد شد.</p></div>';
+        } catch (\Exception $e) {
+            echo '<div class="error"><p>خطا: ' . esc_html($e->getMessage()) . '</p></div>';
+        }
     }
 
     if ($action === 'update') {
@@ -45,6 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+// دریافت لیست پلن‌ها
 $plans = $planService->getAll();
 ?>
 

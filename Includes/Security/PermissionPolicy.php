@@ -3,24 +3,29 @@ namespace CreditSystem\Includes\security;
 
 use CreditSystem\Includes\Database\Repositories\CreditAccountRepository;
 use CreditSystem\Includes\Database\Repositories\MerchantRepository;
-use CreditSystem\Includes\security\AuditLogger;
 
-/**
- * Class PermissionPolicy
- * 
- * مدیریت دسترسی کاربران و فروشندگان به بخش‌ها و اکشن‌های مختلف سیستم.
- * بررسی می‌کند آیا کاربر یا فروشنده اجازه انجام عملیات خاص را دارد یا خیر.
- */
 class PermissionPolicy
 {
-    private CreditAccountRepository $creditAccountRepo;
-    private MerchantRepository $merchantRepo;
-    private AuditLogger $logger;
+    // ۱. تعریف ثابت‌ها (بسیار مهم: چون در متدها از این‌ها استفاده کرده‌اید)
+    const ACTION_VIEW_CREDIT = 'view_credit';
+    const ACTION_PAY_INSTALLMENT = 'pay_installment';
+    const ACTION_REQUEST_CREDIT = 'request_credit';
+    const MERCHANT_REDEEM_CODE = 'redeem_credit_code';
+    const MERCHANT_WITHDRAW = 'withdraw_balance';
+
+    /** @var CreditAccountRepository */
+    private $creditAccountRepo;
+
+    /** @var MerchantRepository */
+    private $merchantRepo;
+
+    /** @var AuditLogger */
+    private $logger;
 
     public function __construct(
-        CreditAccountRepository $creditAccountRepo,
-        MerchantRepository $merchantRepo,
-        AuditLogger $logger
+        $creditAccountRepo,
+        $merchantRepo,
+        $logger
     ) {
         $this->creditAccountRepo = $creditAccountRepo;
         $this->merchantRepo = $merchantRepo;
@@ -28,30 +33,22 @@ class PermissionPolicy
     }
 
     /**
-     * بررسی دسترسی کاربر به عملیات خاص
-     *
-     * @param int $userId
-     * @param string $action
-     * @return bool
+     * بررسی دسترسی کاربر
      */
-    public function canUserPerform(int $userId, string $action): bool
+    public function canUserPerform($userId, $action)
     {
-        // گرفتن اطلاعات اعتبار کاربر
-        $creditAccount = $this->creditAccountRepo->findByUserId($userId);
+        $account = $this->creditAccountRepo->findByUserId($userId);
+        $isActive = ($account !== null && $account->status === 'active');
 
+        // استفاده از switch برای سازگاری با PHP 7.x
         switch ($action) {
-            case 'view_credit':
-                $allowed = $creditAccount !== null && $creditAccount->status === 'active';
+            case self::ACTION_VIEW_CREDIT:
+            case self::ACTION_PAY_INSTALLMENT:
+                $allowed = $isActive;
                 break;
-
-            case 'pay_installment':
-                $allowed = $creditAccount !== null && $creditAccount->status === 'active';
+            case self::ACTION_REQUEST_CREDIT:
+                $allowed = !$isActive;
                 break;
-
-            case 'request_credit':
-                $allowed = $creditAccount === null || $creditAccount->status !== 'active';
-                break;
-
             default:
                 $allowed = false;
         }
@@ -61,13 +58,9 @@ class PermissionPolicy
     }
 
     /**
-     * بررسی دسترسی فروشنده به عملیات خاص
-     *
-     * @param int $merchantId
-     * @param string $action
-     * @return bool
+     * بررسی دسترسی فروشنده
      */
-    public function canMerchantPerform(int $merchantId, string $action): bool
+    public function canMerchantPerform($merchantId, $action)
     {
         $merchant = $this->merchantRepo->findById($merchantId);
 
@@ -76,45 +69,48 @@ class PermissionPolicy
             return false;
         }
 
-        switch ($action) {
-            case 'redeem_credit_code':
-            case 'view_sales_report':
-            case 'withdraw_balance':
-                $allowed = true;
-                break;
+        $allowedActions = [
+            self::MERCHANT_REDEEM_CODE,
+            self::MERCHANT_WITHDRAW,
+            'view_sales_report'
+        ];
 
-            default:
-                $allowed = false;
-        }
-
+        $allowed = in_array($action, $allowedActions, true);
+        
         $this->logger->logPermissionCheck('merchant', $merchantId, $action, $allowed);
         return $allowed;
     }
 
     /**
-     * بررسی دسترسی admin یا operator به سیستم
-     *
-     * @param string $role
-     * @param string $action
-     * @return bool
+     * بررسی دسترسی ادمین
      */
-    public function canAdminPerform(string $role, string $action): bool
+    public function canAdminPerform($wpUserId, $action)
     {
-        // roles: admin, credit_operator
-        if ($role === 'admin') {
-            return true; // دسترسی کامل
+        if (user_can($wpUserId, 'manage_options')) {
+            return true; 
         }
 
-        if ($role === 'credit_operator') {
-            $allowedActions = [
+        if (user_can($wpUserId, 'credit_operator')) {
+            $operatorActions = [
                 'approve_credit',
                 'view_users',
-                'adjust_credit',
-                'override_installments'
+                'adjust_credit'
             ];
-            return in_array($action, $allowedActions, true);
+            return in_array($action, $operatorActions, true);
         }
 
         return false;
     }
+    /**
+ * بررسی دسترسی ادمین و توقف اجرای صفحه در صورت عدم دسترسی
+ */
+/**
+ */
+public static function adminOnly() {
+    // چون استاتیک است، دیگر به $this دسترسی نداریم
+    // پس مستقیماً از تابع وردپرس استفاده می‌کنیم
+    if (!current_user_can('manage_options')) {
+        wp_die('شما اجازه دسترسی به این بخش را ندارید.');
+    }
 }
+} // <--- پایان واقعی کلاس. تمام متدها باید قبل از این آکولاد باشند.

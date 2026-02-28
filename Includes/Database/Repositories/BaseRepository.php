@@ -6,9 +6,6 @@ use wpdb;
 
 /**
  * Base Repository
- *
- * پایه تمام Repositoryهای سیستم اعتباری
- * شامل متدهای استاندارد CRUD با پشتیبانی از prepared statements
  */
 class BaseRepository
 {
@@ -16,13 +13,11 @@ class BaseRepository
     protected $db;
 
     /**
-     * Constructor with optional dependency injection
-     *
      * @param wpdb|null $db
      */
-    public function __construct(?wpdb $db = null)
+    public function __construct($db = null) // حذف ?wpdb برای سازگاری
     {
-        $this->db = $db ?? $GLOBALS['wpdb'];
+        $this->db = $db ?: $GLOBALS['wpdb'];
 
         if (!$this->db instanceof wpdb) {
             throw new \RuntimeException('wpdb instance is required for BaseRepository');
@@ -30,9 +25,9 @@ class BaseRepository
     }
 
     /**
-     * اجرای کوئری عمومی (برای DELETE, UPDATE, INSERT بدون بازگشت داده)
+     * اجرای کوئری عمومی
      */
-    protected function query(string $sql, array $params = []): int|bool
+    protected function query($sql, array $params = []) 
     {
         if (!empty($params)) {
             $sql = $this->db->prepare($sql, ...$params);
@@ -42,9 +37,9 @@ class BaseRepository
     }
 
     /**
-     * دریافت یک مقدار تک (مثل COUNT)
+     * دریافت یک مقدار تک
      */
-    protected function getVar(string $sql, array $params = []): mixed
+    protected function getVar($sql, array $params = [])
     {
         if (!empty($params)) {
             $sql = $this->db->prepare($sql, ...$params);
@@ -56,7 +51,7 @@ class BaseRepository
     /**
      * دریافت یک ردیف
      */
-    protected function getRow(string $sql, array $params = []): ?object
+    protected function getRow($sql, array $params = [])
     {
         if (!empty($params)) {
             $sql = $this->db->prepare($sql, ...$params);
@@ -70,7 +65,7 @@ class BaseRepository
     /**
      * دریافت چندین ردیف
      */
-    protected function getResults(string $sql, array $params = []): array
+    protected function getResults($sql, array $params = [])
     {
         if (!empty($params)) {
             $sql = $this->db->prepare($sql, ...$params);
@@ -82,13 +77,11 @@ class BaseRepository
     /**
      * درج رکورد جدید
      */
-    protected function insert(string $table, array $data, array $formats): int|false
+    protected function insert($table, array $data, array $formats)
     {
         $result = $this->db->insert($table, $data, $formats);
 
         if ($result === false) {
-            // می‌تونی اینجا لاگ کنی اگر خواستی
-            // $this->logError();
             return false;
         }
 
@@ -99,12 +92,12 @@ class BaseRepository
      * به‌روزرسانی رکورد
      */
     protected function update(
-        string $table,
+        $table,
         array $data,
         array $where,
         array $dataFormats = [],
         array $whereFormats = []
-    ): bool {
+    ) {
         $result = $this->db->update($table, $data, $where, $dataFormats, $whereFormats);
 
         return $result !== false;
@@ -113,7 +106,7 @@ class BaseRepository
     /**
      * حذف رکورد
      */
-    protected function delete(string $table, array $where, array $formats = []): bool
+    protected function delete($table, array $where, array $formats = [])
     {
         $result = $this->db->delete($table, $where, $formats);
 
@@ -123,19 +116,18 @@ class BaseRepository
     /**
      * آخرین خطای دیتابیس
      */
-    protected function lastError(): string
+    protected function lastError()
     {
         return (string) $this->db->last_error;
     }
 
     /**
-     * لاگ کردن خطا (اختیاری - بعداً می‌تونی با AuditLogger وصلش کنی)
+     * لاگ کردن خطا
      */
-    protected function logError(string $context = ''): void
+    protected function logError($context = '')
     {
         if (!empty($this->db->last_error)) {
             error_log("[CreditSystem DB Error] {$context}: " . $this->db->last_error);
-            // یا file_put_contents اگر خواستی
         }
     }
 }

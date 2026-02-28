@@ -14,7 +14,7 @@ class MerchantRepository extends BaseRepository
     public function __construct()
     {
         parent::__construct();
-        $this->table = $this->db->prefix . 'credit_merchants';
+        $this->table = $this->db->prefix . 'cs_merchant';
     }
 
     /**

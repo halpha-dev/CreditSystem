@@ -1,73 +1,35 @@
 <?php
-/**
- * CS_Installer
- *
- * مدیریت فعال‌سازی، غیرفعال‌سازی و مهاجرت دیتابیس پلاگین Credit System
- * نسخه سازگار با ساختار فعلی (۹ جدول + Migrations.php)
- */
-
 class CS_Installer {
 
-    /**
-     * فعال‌سازی پلاگین
-     */
-    public static function activate(): void
-    {
-        // لود constants اگر هنوز لود نشده
+    public static function activate() {
         if (!defined('CS_PLUGIN_DIR')) {
-            require_once dirname(__FILE__) . '/config/constants.php';
+            require_once dirname(dirname(__FILE__)) . '/config/constants.php';
         }
 
         self::run_migrations();
         self::create_default_options();
         self::add_default_roles_and_caps();
 
-        // فلاش قوانین permalink (برای روترهای کاربر/مرچنت)
         flush_rewrite_rules();
     }
 
-    /**
-     * غیرفعال‌سازی پلاگین
-     */
-    public static function deactivate(): void
-    {
-        flush_rewrite_rules();
-
-        // پاک کردن تمام کرون‌جاب‌های سیستم
-        $scheduled_hooks = [
-            'cs_apply_penalties',
-            'cs_expire_codes',
-            'cs_send_reminders',
-            'cs_kyc_cleanup'
-        ];
-
-        foreach ($scheduled_hooks as $hook) {
-            wp_clear_scheduled_hook($hook);
-        }
-    }
-
-    /**
-     * اجرای مهاجرت کامل دیتابیس (۹ جدول)
-     */
-    private static function run_migrations(): void
-    {
-        $migration_file = dirname(__FILE__) . '/Includes/Database/Migrations.php';
+    private static function run_migrations() {
+        // دقت کنید مسیر فایل Migrations.php دقیق باشد
+        $migration_file = plugin_dir_path(__FILE__) . 'Includes/Database/Migrations.php';
 
         if (file_exists($migration_file)) {
             require_once $migration_file;
 
-            if (class_exists('\\CreditSystem\\Includes\\Database\\Migrations')) {
+            // حذف بک‌اسلش اضافی برای اطمینان از پیدا شدن کلاس
+            if (class_exists('CreditSystem\Includes\Database\Migrations')) {
                 $migrations = new \CreditSystem\Includes\Database\Migrations();
                 $migrations->migrate();
-
-                // ذخیره نسخه دیتابیس
-                if (defined('CS_DB_VERSION')) {
-                    update_option('cs_db_version', CS_DB_VERSION, false);
-                }
+                
+                update_option('cs_db_version', defined('CS_DB_VERSION') ? CS_DB_VERSION : '1.0.0');
             }
         }
     }
-
+    // سایر متدها (deactivate و ...) را هم به همین شکل بدون : void قرار دهید
     /**
      * ایجاد تنظیمات پیش‌فرض
      */

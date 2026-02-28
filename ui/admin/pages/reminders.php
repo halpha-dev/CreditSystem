@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
    دریافت لیست یادآوری‌ها
 ========================= */
 
-$reminders = $pdo->query("
+$reminders = $wpdb->query("
 SELECT r.*,
        i.amount AS installment_amount,
        i.due_date,
